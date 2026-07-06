@@ -323,6 +323,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabName === 'orders') fetchOrders();
         if (tabName === 'funds') fetchFunds();
         if (tabName === 'profile') fetchProfile();
+        if (tabName === 'trade-history') fetchTradeHistory();
+        if (tabName === 'withdraw') fetchWithdrawals();
+        if (tabName === 'ledger') fetchLedger();
+        if (tabName === 'rejections') fetchRejections();
       }
     });
   });
@@ -749,6 +753,224 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>Angel One SmartAPI (Live Feed Active)</td>
       </tr>
     `;
+  }
+
+  function fetchTradeHistory() {
+    const tbody = document.querySelector('#view-dynamic-trade-history tbody');
+    if (!tbody) return;
+
+    if (!activePlatformUser) {
+      tbody.innerHTML = `
+        <tr class="empty-state-row">
+          <td colspan="7" class="empty-state-cell">
+            <div class="empty-state-container"><p>Please log in to view trade history</p></div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
+    const userPos = positions.filter(p => p.userEmail === activePlatformUser.email);
+
+    if (userPos.length === 0) {
+      tbody.innerHTML = `
+        <tr class="empty-state-row">
+          <td colspan="7" class="empty-state-cell">
+            <div class="empty-state-container"><p>No trades executed today</p></div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = '';
+    userPos.forEach(pos => {
+      const tr = document.createElement('tr');
+      const val = pos.buyPrice * pos.quantity;
+      tr.innerHTML = `
+        <td>${pos.createdAt || '--'}</td>
+        <td class="bold">${pos.symbol}</td>
+        <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${pos.exchange}</span></td>
+        <td style="color: #38a169; font-weight: 600;">BUY</td>
+        <td>${pos.quantity}</td>
+        <td>₹${pos.buyPrice.toFixed(2)}</td>
+        <td>₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+      `;
+      tbody.appendChild(tr);
+
+      if (pos.status === 'CLOSED') {
+        const trClose = document.createElement('tr');
+        const closeVal = pos.closePrice * pos.quantity;
+        trClose.innerHTML = `
+          <td>${pos.createdAt || '--'}</td>
+          <td class="bold">${pos.symbol}</td>
+          <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${pos.exchange}</span></td>
+          <td style="color: #e53e3e; font-weight: 600;">SELL</td>
+          <td>${pos.quantity}</td>
+          <td>₹${pos.closePrice ? pos.closePrice.toFixed(2) : '--'}</td>
+          <td>₹${closeVal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+        `;
+        tbody.appendChild(trClose);
+      }
+    });
+  }
+
+  function fetchWithdrawals() {
+    const tbody = document.querySelector('#view-dynamic-withdraw tbody');
+    if (!tbody) return;
+
+    if (!activePlatformUser) {
+      tbody.innerHTML = `
+        <tr class="empty-state-row">
+          <td colspan="4" class="empty-state-cell">
+            <div class="empty-state-container"><p>Please log in to view withdrawals</p></div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const txs = JSON.parse(localStorage.getItem('transactions_db') || '[]');
+    const userWithdraws = txs.filter(t => t.userEmail === activePlatformUser.email && t.type === 'WITHDRAWAL');
+
+    if (userWithdraws.length === 0) {
+      tbody.innerHTML = `
+        <tr class="empty-state-row">
+          <td colspan="4" class="empty-state-cell">
+            <div class="empty-state-container"><p>No withdrawal requests found</p></div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = '';
+    userWithdraws.forEach(t => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${t.createdAt || '--'}</td>
+        <td style="color: #e53e3e; font-weight: 600;">₹${t.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <td>Bank Account (HDFC ****8901)</td>
+        <td><span style="padding: 2px 6px; border-radius: 4px; font-size: 11px; background-color: #e6fffa; color: #38a169; font-weight: 600;">APPROVED</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function fetchLedger() {
+    const tbody = document.querySelector('#view-dynamic-ledger tbody');
+    if (!tbody) return;
+
+    if (!activePlatformUser) {
+      tbody.innerHTML = `
+        <tr class="empty-state-row">
+          <td colspan="5" class="empty-state-cell">
+            <div class="empty-state-container"><p>Please log in to view ledger</p></div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const txs = JSON.parse(localStorage.getItem('transactions_db') || '[]');
+    const userTxs = txs.filter(t => t.userEmail === activePlatformUser.email);
+
+    if (userTxs.length === 0) {
+      tbody.innerHTML = `
+        <tr class="empty-state-row">
+          <td colspan="5" class="empty-state-cell">
+            <div class="empty-state-container"><p>No transactions available in current statement</p></div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = '';
+    let runningBalance = 0;
+    
+    userTxs.forEach(t => {
+      const tr = document.createElement('tr');
+      
+      let particulars = '';
+      let debit = '--';
+      let credit = '--';
+
+      if (t.type === 'DEPOSIT') {
+        particulars = 'Simulated Net Banking Payin';
+        credit = `₹${t.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        runningBalance += t.amount;
+      } else if (t.type === 'WITHDRAWAL') {
+        particulars = 'Payout request processed';
+        debit = `₹${t.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        runningBalance -= t.amount;
+      } else if (t.type === 'TRADE_BUY') {
+        particulars = 'Virtual Trade BUY (incl. 10% commission)';
+        debit = `₹${Math.abs(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        runningBalance += t.amount;
+      } else if (t.type === 'TRADE_CLOSE') {
+        particulars = 'Virtual Trade Close payout';
+        if (t.amount >= 0) {
+          credit = `₹${t.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        } else {
+          debit = `₹${Math.abs(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        }
+        runningBalance += t.amount;
+      }
+
+      tr.innerHTML = `
+        <td>${t.createdAt || '--'}</td>
+        <td>${particulars}</td>
+        <td style="color: #e53e3e;">${debit}</td>
+        <td style="color: #38a169;">${credit}</td>
+        <td class="bold" style="color: #0b57d0;">₹${runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function fetchRejections() {
+    const tbody = document.querySelector('#view-dynamic-rejections tbody');
+    if (!tbody) return;
+
+    if (!activePlatformUser) {
+      tbody.innerHTML = `
+        <tr class="empty-state-row">
+          <td colspan="5" class="empty-state-cell">
+            <div class="empty-state-container"><p>Please log in to view rejections</p></div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const rejections = JSON.parse(localStorage.getItem('rejections_db') || '[]');
+    const userRejects = rejections.filter(r => r.userEmail === activePlatformUser.email);
+
+    if (userRejects.length === 0) {
+      tbody.innerHTML = `
+        <tr class="empty-state-row">
+          <td colspan="5" class="empty-state-cell">
+            <div class="empty-state-container"><p>No rejected orders recorded</p></div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = '';
+    userRejects.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.time || '--'}</td>
+        <td class="bold">${r.symbol}</td>
+        <td style="color: #38a169; font-weight: 600;">${r.side}</td>
+        <td>${r.qty}</td>
+        <td style="color: #e53e3e; font-weight: 600;">${r.reason}</td>
+      `;
+      tbody.appendChild(tr);
+    });
   }
 
   // Watchlist Action Buttons for Overlay opening
@@ -1187,6 +1409,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const totalCost = value + commission;
 
       if (totalCost > activePlatformUser.walletBalance) {
+        // Log rejection
+        const rejections = JSON.parse(localStorage.getItem('rejections_db') || '[]');
+        rejections.push({
+          userEmail: activePlatformUser.email,
+          time: new Date().toLocaleString(),
+          symbol: selectedScript.code,
+          side: 'BUY',
+          qty: quantity,
+          reason: `Insufficient wallet balance (Required ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })})`
+        });
+        localStorage.setItem('rejections_db', JSON.stringify(rejections));
+
         alert(`Insufficient wallet balance!\nTotal cost (Trade Value + 10% Platform Fee) is ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}, but you only have ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}.`);
         return;
       }
