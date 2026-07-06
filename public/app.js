@@ -387,13 +387,25 @@ document.addEventListener('DOMContentLoaded', () => {
     pane.className = 'view-pane active';
     pane.id = 'view-dynamic-settings';
 
+    const isBypassChecked = localStorage.getItem('bypassMarketHours') === 'true';
+
     pane.innerHTML = `
       <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; max-width: 500px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;">
         <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #1a202c;">Active Account Settings</h3>
         <p style="font-size: 13px; color: #718096; margin: 0;">You are currently logged in as: <strong>${activePlatformUser.name}</strong> (${activePlatformUser.email})</p>
+        
+        <div style="display: flex; align-items: center; gap: 8px; padding: 12px; background: #f7fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
+          <input type="checkbox" id="bypass-market-hours-toggle" ${isBypassChecked ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
+          <label for="bypass-market-hours-toggle" style="font-size: 13px; font-weight: 600; color: #4a5568; cursor: pointer; user-select: none;">Bypass market hours check (Developer Test Mode)</label>
+        </div>
+
         <button class="btn" id="btn-logout-submit" style="height: 40px; background-color: #e53e3e; color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;">Logout Account</button>
       </div>
     `;
+
+    pane.querySelector('#bypass-market-hours-toggle').addEventListener('change', (e) => {
+      localStorage.setItem('bypassMarketHours', e.target.checked ? 'true' : 'false');
+    });
 
     pane.querySelector('#btn-logout-submit').addEventListener('click', () => {
       localStorage.removeItem('activePlatformUser');
@@ -1404,6 +1416,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      // Check market hours
+      const bypass = localStorage.getItem('bypassMarketHours') === 'true';
+      const marketStatus = isMarketOpen(selectedScript.exchange);
+      if (!marketStatus.open && !bypass) {
+        const rejections = JSON.parse(localStorage.getItem('rejections_db') || '[]');
+        rejections.push({
+          userEmail: activePlatformUser.email,
+          time: new Date().toLocaleString(),
+          symbol: selectedScript.code,
+          side: 'BUY',
+          qty: quantity,
+          reason: `Market Closed: ${marketStatus.reason}`
+        });
+        localStorage.setItem('rejections_db', JSON.stringify(rejections));
+
+        alert(`Order Rejected: ${marketStatus.reason}\n\n(Tip: You can check "Bypass market hours" in the Account settings profile to test this anytime).`);
+        return;
+      }
+
       const value = ltp * quantity;
       const commission = 0; // Removed 10% fee
       const totalCost = value;
@@ -1492,10 +1523,75 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function isMarketOpen(exchange) {
+    try {
+      const options = { timeZone: 'Asia/Kolkata', hour12: false, weekday: 'short', hour: '2-digit', minute: '2-digit' };
+      const formatter = new Intl.DateTimeFormat('en-US', options);
+      const formatted = formatter.format(new Date()); 
+      
+      const parts = formatted.split(', ');
+      const weekday = parts[0];
+      const timeParts = parts[1].split(':');
+      const hours = parseInt(timeParts[0]);
+      const minutes = parseInt(timeParts[1]);
+      const totalMinutes = hours * 60 + minutes;
+
+      if (weekday === 'Sat' || weekday === 'Sun') {
+        return { open: false, reason: 'Market is closed on weekends (Sat/Sun).' };
+      }
+
+      const ex = (exchange || 'NSE').toUpperCase();
+      if (ex === 'MCX') {
+        const mcxStart = 9 * 60; // 09:00
+        const mcxEnd = 23 * 60 + 30; // 23:30
+        if (totalMinutes >= mcxStart && totalMinutes <= mcxEnd) {
+          return { open: true };
+        } else {
+          return { open: false, reason: 'MCX Market hours are 9:00 AM to 11:30 PM IST.' };
+        }
+      } else {
+        const nseStart = 9 * 60 + 15; // 09:15
+        const nseEnd = 15 * 60 + 30; // 15:30
+        if (totalMinutes >= nseStart && totalMinutes <= nseEnd) {
+          return { open: true };
+        } else {
+          return { open: false, reason: 'NSE Market hours are 9:15 AM to 3:30 PM IST.' };
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      return { open: true }; // Safe fallback
+    }
+  }
+
+  function updateMarketStatusBadge() {
+    const badge = document.getElementById('market-status-badge');
+    if (!badge) return;
+
+    const nseStatus = isMarketOpen('NSE');
+    if (nseStatus.open) {
+      badge.textContent = 'Market: Open';
+      badge.style.background = '#e6fffa';
+      badge.style.color = '#38a169';
+    } else {
+      const mcxStatus = isMarketOpen('MCX');
+      if (mcxStatus.open) {
+        badge.textContent = 'MCX: Open';
+        badge.style.background = '#feebc8';
+        badge.style.color = '#dd6b20';
+      } else {
+        badge.textContent = 'Market: Closed';
+        badge.style.background = '#fff5f5';
+        badge.style.color = '#e53e3e';
+      }
+    }
+  }
+
   // Automatic live ticker loop (every 500ms)
   function startLiveTicker() {
     setInterval(async () => {
       if (!apiConnected) return;
+      updateMarketStatusBadge();
       
       const watchlistTokens = addedScripts.map(s => ({
         exchange: s.exchange,
