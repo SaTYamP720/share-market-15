@@ -1,0 +1,14 @@
+{
+  "name": "share-market-18",
+  "version": "1.0.0",
+  "description": "Share Market 18 trading terminal frontend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "otplib": "^13.4.1",
+    "smartapi-javascript": "^1.0.27"
+  }
+}
