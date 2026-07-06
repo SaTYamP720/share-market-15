@@ -525,16 +525,11 @@ app.get('/api/search-scripts', (req, res) => {
   }
 
   // Count matches in each category
-  const categoriesList = ['futures', 'options', 'mcx', 'forex'];
+  const categoriesList = ['equity', 'futures', 'options', 'mcx', 'forex'];
   const counts = {};
   categoriesList.forEach(cat => {
     counts[cat] = allMatches.filter(item => filterFn(item, cat)).length;
   });
-
-  // US stocks, comex, us index don't exist in Angel One scrip master, keep them as 0
-  counts['us-stocks'] = 0;
-  counts['comex'] = 0;
-  counts['us-index'] = 0;
 
   // Filter actual results to send for the currently active tab
   const categoryResults = allMatches.filter(item => filterFn(item, activeCategory));
