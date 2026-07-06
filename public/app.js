@@ -1405,8 +1405,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const value = ltp * quantity;
-      const commission = value * 0.10; // 10% Platform fee
-      const totalCost = value + commission;
+      const commission = 0; // Removed 10% fee
+      const totalCost = value;
 
       if (totalCost > activePlatformUser.walletBalance) {
         // Log rejection
@@ -1421,7 +1421,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         localStorage.setItem('rejections_db', JSON.stringify(rejections));
 
-        alert(`Insufficient wallet balance!\nTotal cost (Trade Value + 10% Platform Fee) is ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}, but you only have ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}.`);
+        alert(`Insufficient wallet balance!\nRequired balance is ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}, but you only have ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}.`);
         return;
       }
 
@@ -1429,9 +1429,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          `Symbol: ${selectedScript.code}\n` +
                          `Quantity: ${quantity}\n` +
                          `Price: ₹${ltp.toFixed(2)}\n` +
-                         `Trade Value: ₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\n` +
-                         `10% Platform Fee: ₹${commission.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\n` +
-                         `Total Cost: ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\n\n` +
+                         `Trade Value: ₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\n\n` +
                          `Proceed?`;
       if (!confirm(confirmMsg)) return;
 
@@ -1462,7 +1460,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Log transaction
       logTransaction('TRADE_BUY', -totalCost);
 
-      alert(`BUY order placed successfully!\nDeducted ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })} (including 10% fee) from your wallet.`);
+      alert(`BUY order placed successfully!\nDebited ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })} from your wallet.`);
       
       updateHeaderBalance();
       fetchPositions();
