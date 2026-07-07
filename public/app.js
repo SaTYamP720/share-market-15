@@ -1434,25 +1434,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const colorStyle = isPositive ? 'color: #38a169;' : 'color: #e53e3e;';
     const sign = isPositive ? '+' : '';
 
-    // Calculate a mock SVGs sparkline path based on Open, Low, High, Close
+    // Calculate mock coordinates for a smooth Bezier sparkline path
     const open = parseFloat(q.open) || 0;
     const high = parseFloat(q.high) || 0;
     const low = parseFloat(q.low) || 0;
-    const close = parseFloat(q.close) || 0;
     const ltp = parseFloat(q.ltp) || 0;
 
-    let points = [];
+    let y0, y1, y2, y3, y4;
     if (high > low) {
-      const scale = (val) => 70 - ((val - low) / (high - low)) * 60; // scale between 10 and 70
-      points = [
-        `0,${scale(open)}`,
-        `60,${scale(low)}`,
-        `120,${scale(ltp * 0.995)}`,
-        `180,${scale(high)}`,
-        `250,${scale(ltp)}`
-      ];
+      const scale = (val) => 80 - ((val - low) / (high - low)) * 60; // scale between 20 and 80 to fit grid
+      y0 = scale(open);
+      y1 = scale(low);
+      y2 = scale(ltp * 0.998); // mid variation
+      y3 = scale(high);
+      y4 = scale(ltp);
     } else {
-      points = ["0,40", "60,45", "120,38", "180,42", "250,40"];
+      y0 = 50; y1 = 65; y2 = 40; y3 = 55; y4 = 45;
     }
 
     detailsPanel.innerHTML = `
@@ -1501,9 +1498,31 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <!-- Mini Sparkline Graph -->
-        <div style="height: 100px; display: flex; align-items: center; justify-content: center; background-color: #f8fafc; border-radius: 8px; position: relative; padding: 10px;">
+        <div style="height: 100px; display: flex; align-items: center; justify-content: center; background-color: #f8fafc; border: 1px solid #edf2f7; border-radius: 8px; position: relative; padding: 12px; overflow: hidden;">
           <svg style="width: 100%; height: 100%; overflow: visible;">
-            <path d="M ${points.join(' L ')}" fill="none" stroke="${isPositive ? '#38a169' : '#e53e3e'}" stroke-width="2.5" stroke-linecap="round"></path>
+            <defs>
+              <linearGradient id="chart-grad-${isPositive ? 'up' : 'down'}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${isPositive ? '#38a169' : '#e53e3e'}" stop-opacity="0.18"></stop>
+                <stop offset="100%" stop-color="${isPositive ? '#38a169' : '#e53e3e'}" stop-opacity="0.00"></stop>
+              </linearGradient>
+            </defs>
+            <!-- Grid Lines -->
+            <line x1="0" y1="15" x2="250" y2="15" stroke="#edf2f7" stroke-width="1" stroke-dasharray="3,3"></line>
+            <line x1="0" y1="40" x2="250" y2="40" stroke="#edf2f7" stroke-width="1" stroke-dasharray="3,3"></line>
+            <line x1="0" y1="65" x2="250" y2="65" stroke="#edf2f7" stroke-width="1" stroke-dasharray="3,3"></line>
+            
+            <!-- Area Fill Under Curve -->
+            <path d="M 0,${y0} C 30,${y0} 30,${y1} 60,${y1} C 90,${y1} 90,${y2} 120,${y2} C 150,${y2} 150,${y3} 180,${y3} C 215,${y3} 215,${y4} 250,${y4} L 250,90 L 0,90 Z" fill="url(#chart-grad-${isPositive ? 'up' : 'down'})" stroke="none"></path>
+            
+            <!-- Smooth Bezier Line -->
+            <path d="M 0,${y0} C 30,${y0} 30,${y1} 60,${y1} C 90,${y1} 90,${y2} 120,${y2} C 150,${y2} 150,${y3} 180,${y3} C 215,${y3} 215,${y4} 250,${y4}" fill="none" stroke="${isPositive ? '#38a169' : '#e53e3e'}" stroke-width="3" stroke-linecap="round"></path>
+            
+            <!-- Pulsing Price Dot -->
+            <circle cx="250" cy="${y4}" r="4" fill="${isPositive ? '#38a169' : '#e53e3e'}"></circle>
+            <circle cx="250" cy="${y4}" r="10" fill="none" stroke="${isPositive ? '#38a169' : '#e53e3e'}" stroke-width="2" opacity="0.6">
+              <animate attributeName="r" values="4;13" dur="2s" repeatCount="indefinite"></animate>
+              <animate attributeName="opacity" values="0.8;0" dur="2s" repeatCount="indefinite"></animate>
+            </circle>
           </svg>
         </div>
 
