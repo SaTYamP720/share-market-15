@@ -2297,77 +2297,103 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 30000); // Check every 30 seconds
   }
 
-  // Automatic live ticker loop (every 500ms)
+  // =============================================
+  // STEP 4: WebSocket-driven live ticker (replaces HTTP polling)
+  // Prices come from wsLivePrices (filled by price_tick events).
+  // HTTP fallback only for open position tokens NOT in watchlist.
+  // =============================================
   function startLiveTicker() {
-    setInterval(async () => {
+
+    // Helper: get LTP for a script from wsLivePrices cache
+    function getLtpFromWS(exchange, token) {
+      const exchMap = { 'NSE': 1, 'NFO': 2, 'BSE': 3, 'BFO': 4, 'MCX': 5, 'NCDEX': 7, 'CDS': 13 };
+      const exchType = exchMap[(exchange || '').toUpperCase()] || 1;
+      const key = `${exchType}:${token}`;
+      return wsLivePrices[key] !== undefined ? parseFloat(wsLivePrices[key]) : null;
+    }
+
+    // UI refresh loop — runs every 500ms but reads from LOCAL cache, no HTTP
+    setInterval(() => {
       if (!apiConnected) return;
       updateMarketStatusBadge();
-      
-      const watchlistTokens = addedScripts.map(s => ({
-        exchange: s.exchange,
-        token: s.token
-      }));
 
-      let openPosTokens = [];
-      if (activePlatformUser) {
-        const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
-        const openPositions = positions.filter(p => p.userEmail === activePlatformUser.email && p.status === 'OPEN');
-        openPosTokens = openPositions.map(p => ({
-          exchange: p.exchange,
-          token: p.token
-        }));
-      }
-
-      const merged = [...watchlistTokens];
-      openPosTokens.forEach(p => {
-        if (!merged.some(m => m.token === p.token)) {
-          merged.push(p);
+      // Update script.quote.ltp for every watchlist script from WS prices
+      addedScripts.forEach(script => {
+        const ltp = getLtpFromWS(script.exchange, script.token);
+        if (ltp !== null) {
+          if (!script.quote) script.quote = {};
+          script.quote.ltp = ltp;
+          script.quote.symbolToken = script.token;
+          script.quote.exchange = script.exchange;
         }
       });
 
-      if (merged.length === 0) return;
+      // Update positionQuoteCache for open positions from WS prices
+      if (activePlatformUser) {
+        const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
+        positions.filter(p => p.userEmail === activePlatformUser.email && p.status === 'OPEN')
+          .forEach(pos => {
+            const ltp = getLtpFromWS(pos.exchange, pos.token);
+            if (ltp !== null) {
+              if (!positionQuoteCache[pos.token]) positionQuoteCache[pos.token] = {};
+              positionQuoteCache[pos.token].ltp = ltp;
+            }
+          });
+      }
+
+      // Trigger UI re-renders with latest data
+      checkSlTargetTriggers();
+      renderWatchlistTable();
+      fetchPositions();
+      updateTopbarStats();
+
+      if (selectedScript) {
+        const updated = addedScripts.find(s => s.code === selectedScript.code);
+        if (updated && updated.quote) {
+          selectedScript = updated;
+          renderDetailsPanel();
+          updateOrderModalLiveQuote(updated.quote);
+        }
+      }
+    }, 500);
+
+    // HTTP fallback — only for open position tokens NOT already in watchlist
+    // Runs every 2 seconds (much less frequent than before)
+    setInterval(async () => {
+      if (!apiConnected || !activePlatformUser) return;
+      const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
+      const openPositions = positions.filter(p => p.userEmail === activePlatformUser.email && p.status === 'OPEN');
+
+      // Only fetch tokens that are NOT already covered by WebSocket subscription
+      const needsHTTP = openPositions.filter(pos => {
+        const ltp = getLtpFromWS(pos.exchange, pos.token);
+        return ltp === null; // Not in WS cache yet
+      });
+
+      if (needsHTTP.length === 0) return;
+
+      // Also subscribe these position tokens to WS so next time they come via WS
+      const missingTokens = needsHTTP.map(p => ({ exchange: p.exchange, token: p.token }));
+      socket.emit('ws_subscribe', { tokens: missingTokens });
 
       try {
         const response = await fetch('/api/market-data-batch', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ scripts: merged })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scripts: needsHTTP.map(p => ({ exchange: p.exchange, token: p.token })) })
         });
         const result = await response.json();
-        
         if (result.success && result.data) {
           result.data.forEach(qData => {
-            const script = addedScripts.find(s => s.token === qData.symbolToken && s.exchange.toUpperCase() === qData.exchange.toUpperCase());
-            if (script) {
-              script.quote = qData;
-            } else {
-              positionQuoteCache[qData.symbolToken] = qData;
-            }
+            positionQuoteCache[qData.symbolToken] = qData;
           });
-
-          // Check SL / Target triggers for all open positions
-          checkSlTargetTriggers();
-          
-          renderWatchlistTable();
-          fetchPositions();
-          updateTopbarStats();
-
-          if (selectedScript) {
-            const updated = addedScripts.find(s => s.code === selectedScript.code);
-            if (updated && updated.quote) {
-              selectedScript = updated;
-              renderDetailsPanel();
-              updateOrderModalLiveQuote(updated.quote);
-            }
-          }
         }
       } catch (e) {
-        console.error("Live ticker polling exception:", e);
+        console.error('[Ticker] HTTP fallback error:', e);
       }
-    }, 500);
+    }, 2000);
   }
+
 
   function updateTopbarStats() {
     if (!activePlatformUser) return;
