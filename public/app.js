@@ -1547,12 +1547,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // Live calculation updates
         function updateCalculations() {
           const qty = parseInt(qtyInput.value) || 0;
-          const fullValue = price * qty;
+          const currentPrice = window.currentOrderModalPrice || price;
+          const fullValue = currentPrice * qty;
           const requiredMargin = currentOrderType === 'MIS' ? fullValue * 0.20 : fullValue;
           marginEst.textContent = `₹${requiredMargin.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
         
         qtyInput.oninput = updateCalculations;
+        
+        // Initialize global reference
+        window.currentOrderModalPrice = price;
         updateCalculations();
 
         // Style the main action button
@@ -1571,6 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
           qtyInput.oninput = null;
           tabMis.onclick = null;
           tabNrml.onclick = null;
+          window.currentOrderModalPrice = null;
         }
 
         closeBtn.onclick = () => {
@@ -1582,6 +1587,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const qty = parseInt(qtyInput.value);
           const stopLoss = slInput.value ? parseFloat(slInput.value) : null;
           const target = targetInput.value ? parseFloat(targetInput.value) : null;
+          const finalPrice = window.currentOrderModalPrice || price;
 
           if (isNaN(qty) || qty <= 0) {
             showToast('Please enter a valid positive quantity.', 'error');
@@ -1595,7 +1601,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           cleanup();
-          resolve({ qty, orderType: currentOrderType, stopLoss, target });
+          resolve({ qty, orderType: currentOrderType, stopLoss, target, price: finalPrice });
         };
       });
     }
@@ -1892,6 +1898,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Update order modal price and margin dynamically if it is open
+  function updateOrderModalLiveQuote(quote) {
+    const modal = document.getElementById('order-modal');
+    if (!modal || modal.style.display !== 'flex') return;
+
+    const priceEl = document.getElementById('order-modal-price');
+    const qtyInput = document.getElementById('order-qty-input');
+    const marginEst = document.getElementById('order-modal-margin-est');
+    
+    const actionBadge = document.getElementById('order-modal-action-badge');
+    const side = actionBadge.textContent.toUpperCase();
+
+    const ltp = parseFloat(quote.ltp);
+    let price = ltp;
+    if (side === 'BUY') {
+      price = quote.depth && quote.depth.sell && quote.depth.sell.length > 0 ? parseFloat(quote.depth.sell[0].price) : ltp;
+    } else {
+      price = quote.depth && quote.depth.buy && quote.depth.buy.length > 0 ? parseFloat(quote.depth.buy[0].price) : ltp;
+    }
+
+    priceEl.textContent = `₹${price.toFixed(2)}`;
+
+    window.currentOrderModalPrice = price;
+
+    // Recalculate margin
+    const qty = parseInt(qtyInput.value) || 0;
+    const fullValue = price * qty;
+    const tabMis = document.getElementById('order-tab-mis');
+    const isMIS = tabMis.classList.contains('active');
+    const requiredMargin = isMIS ? fullValue * 0.20 : fullValue;
+    marginEst.textContent = `₹${requiredMargin.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
   // Auto squareoff MIS positions past their exchange cutoff (runs every 30s)
   function startAutoSquareOff() {
     setInterval(() => {
@@ -2002,6 +2041,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (updated && updated.quote) {
               selectedScript = updated;
               renderDetailsPanel();
+              updateOrderModalLiveQuote(updated.quote);
             }
           }
         }
