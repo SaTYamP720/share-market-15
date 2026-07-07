@@ -558,13 +558,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function logTransaction(type, amount) {
+  function logTransaction(type, amount, pnl = null) {
     const txs = JSON.parse(localStorage.getItem('transactions_db') || '[]');
     txs.push({
       id: 'TX' + Date.now(),
       userEmail: activePlatformUser.email,
       type: type,
       amount: amount,
+      pnl: pnl,
       createdAt: new Date().toLocaleString()
     });
     localStorage.setItem('transactions_db', JSON.stringify(txs));
@@ -747,7 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
     activePlatformUser.walletBalance = (activePlatformUser.walletBalance || 0) + payout;
     saveUserData();
     
-    logTransaction('TRADE_CLOSE', pnl);
+    logTransaction('TRADE_CLOSE', payout, pnl);
 
     let alertMsg = `Position squared off!\n${pos.symbol} ${side} closed at ₹${exitPrice.toFixed(2)}\nP&L: ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}`;
     if (penalty > 0) alertMsg += `\n⚠️ Auto Squareoff Penalty: ₹${penalty} deducted.`;
@@ -1000,12 +1001,14 @@ document.addEventListener('DOMContentLoaded', () => {
         particulars = 'Payout request processed';
         debit = `₹${t.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
         runningBalance -= t.amount;
-      } else if (t.type === 'TRADE_BUY') {
-        particulars = 'Virtual Trade BUY (incl. 10% commission)';
+      } else if (t.type === 'TRADE_BUY' || t.type === 'TRADE_SELL_SHORT') {
+        particulars = t.type === 'TRADE_BUY' ? 'Virtual Trade BUY margin debit' : 'Virtual Trade SELL SHORT margin debit';
         debit = `₹${Math.abs(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-        runningBalance += t.amount;
+        runningBalance += t.amount; // amount is negative, so it subtracts
       } else if (t.type === 'TRADE_CLOSE') {
-        particulars = 'Virtual Trade Close payout';
+        const pnlNum = parseFloat(t.pnl);
+        const pnlText = !isNaN(pnlNum) ? ` (P&L: ${pnlNum >= 0 ? '+' : ''}₹${pnlNum.toFixed(2)})` : '';
+        particulars = `Virtual Trade Close payout${pnlText}`;
         if (t.amount >= 0) {
           credit = `₹${t.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
         } else {
