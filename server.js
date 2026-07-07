@@ -13,8 +13,23 @@ const io = new Server(httpServer, {
 const PORT = process.env.PORT || 3000;
 
 // Track which tokens each connected socket is watching
-// Map<socketId, Set<tokenKey>> where tokenKey = "EXCHANGE:TOKEN"
+// Map<socketId, Set<tokenKey>> where tokenKey = "EXCHANGETYPE:TOKEN"
 const socketSubscriptions = new Map();
+
+// =============================================
+// STEP 2: Shared Price Cache
+// Stores the latest price for every subscribed token.
+// Key: "EXCHANGETYPE:TOKEN"  e.g. "5:234230"
+// Value: { ltp, token, exchangeType, ts }
+// =============================================
+const priceCache = new Map();
+
+// Angel One WebSocket state
+let angelWSState = {
+  instance: null,      // WebSocketV2 instance
+  isConnected: false,
+  subscribedKeys: new Set()  // Set of "EXCHANGETYPE:TOKEN" currently subscribed
+};
 
 app.use(express.json());
 // Serve static files from the 'public' directory
@@ -24,7 +39,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 let activeSession = {
   clientCode: null,
   smartConnectInstance: null,
-  profile: null
+  profile: null,
+  feedToken: null   // Needed for Angel One WebSocket authentication
 };
 
 // Load credentials config.json or environment variables
@@ -98,6 +114,8 @@ async function attemptAutoLogin() {
       console.log(`[Backend] Auto-login successful for Client: ${config.client_code}`);
       activeSession.clientCode = config.client_code;
       activeSession.smartConnectInstance = smartConnect;
+      // Store feedToken from session response for WebSocket auth
+      activeSession.feedToken = sessionData.data?.feedToken || null;
       const profileInfo = await smartConnect.getProfile();
       activeSession.profile = profileInfo.data;
     } else {
@@ -108,8 +126,123 @@ async function attemptAutoLogin() {
   }
 }
 
-// Run auto-login 1.5 seconds after server start
-setTimeout(attemptAutoLogin, 1500);
+// =============================================
+// STEP 2: Angel One WebSocket feed connection
+// =============================================
+function getExchangeTypeInt(exchangeStr) {
+  const map = { 'NSE': 1, 'NFO': 2, 'BSE': 3, 'BFO': 4, 'MCX': 5, 'NCDEX': 7, 'CDS': 13 };
+  return map[(exchangeStr || '').toUpperCase()] || 1;
+}
+
+async function initAngelOneWebSocket() {
+  if (!activeSession.smartConnectInstance || !activeSession.smartConnectInstance.generateSession) {
+    console.log('[AngelWS] No real session available, skipping WebSocket init.');
+    return;
+  }
+  try {
+    const { WebSocketV2 } = require('smartapi-javascript');
+
+    const sc = activeSession.smartConnectInstance;
+    const jwttoken = sc.access_token || '';          // set by setAccessToken() after login
+    const feedtoken = activeSession.feedToken || '';
+    const clientcode = activeSession.clientCode;
+    const apikey = config ? config.api_key : '';
+
+    if (!jwttoken || !feedtoken) {
+      console.warn('[AngelWS] JWT or Feed token missing. Cannot start WebSocket.');
+      return;
+    }
+
+    const wsInstance = new WebSocketV2({
+      clientcode,
+      jwttoken,
+      apikey,
+      feedtype: feedtoken
+    });
+
+    wsInstance.on('tick', (tickData) => {
+      if (!tickData || !tickData.token) return;
+      const tokenKey = `${tickData.exchange_type}:${tickData.token}`;
+      // last_traded_price comes as string from the parser, convert to number
+      // Angel One sends price * 100 for stocks, already correct for commodities
+      const rawLtp = parseFloat(tickData.last_traded_price || 0);
+      const ltp = rawLtp > 100000 ? rawLtp / 100 : rawLtp; // divide by 100 for equity
+      priceCache.set(tokenKey, {
+        ltp,
+        token: tickData.token,
+        exchangeType: tickData.exchange_type,
+        ts: Date.now()
+      });
+      // Broadcast to all browser clients
+      io.emit('price_tick', { key: tokenKey, ltp, token: tickData.token });
+    });
+
+    await wsInstance.connect();
+    angelWSState.instance = wsInstance;
+    angelWSState.isConnected = true;
+    console.log('[AngelWS] Connected to Angel One SmartAPI WebSocket feed.');
+  } catch (err) {
+    console.error('[AngelWS] Failed to connect:', err.message);
+  }
+}
+
+// Helper: subscribe a list of { exchangeType (int), token (string) } objects
+function wsSubscribeTokens(tokenList) {
+  if (!angelWSState.isConnected || !angelWSState.instance) return;
+  // Group by exchangeType
+  const grouped = {};
+  for (const { exchangeType, token } of tokenList) {
+    const key = `${exchangeType}:${token}`;
+    if (angelWSState.subscribedKeys.has(key)) continue;
+    angelWSState.subscribedKeys.add(key);
+    if (!grouped[exchangeType]) grouped[exchangeType] = [];
+    grouped[exchangeType].push(token);
+  }
+  for (const [exchType, tokens] of Object.entries(grouped)) {
+    if (tokens.length === 0) continue;
+    angelWSState.instance.fetchData({
+      correlationID: `sub_${Date.now()}`,
+      action: 1, // Subscribe
+      mode: 1,   // LTP
+      exchangeType: parseInt(exchType),
+      tokens
+    });
+    console.log(`[AngelWS] Subscribed ${tokens.length} tokens on exchange ${exchType}`);
+  }
+}
+
+// Helper: unsubscribe tokens no longer watched by anyone
+function wsUnsubscribeTokens(tokenList) {
+  if (!angelWSState.isConnected || !angelWSState.instance) return;
+  const grouped = {};
+  for (const { exchangeType, token } of tokenList) {
+    const key = `${exchangeType}:${token}`;
+    // Only unsubscribe if nobody else is watching this key
+    const stillWatched = [...socketSubscriptions.values()].some(s => s.has(key));
+    if (stillWatched) continue;
+    angelWSState.subscribedKeys.delete(key);
+    if (!grouped[exchangeType]) grouped[exchangeType] = [];
+    grouped[exchangeType].push(token);
+  }
+  for (const [exchType, tokens] of Object.entries(grouped)) {
+    if (tokens.length === 0) continue;
+    angelWSState.instance.fetchData({
+      correlationID: `unsub_${Date.now()}`,
+      action: 0, // Unsubscribe
+      mode: 1,
+      exchangeType: parseInt(exchType),
+      tokens
+    });
+    console.log(`[AngelWS] Unsubscribed ${tokens.length} tokens on exchange ${exchType}`);
+  }
+}
+
+// Run auto-login 1.5 seconds after server start, then start WebSocket
+setTimeout(async () => {
+  await attemptAutoLogin();
+  // Give session a moment to settle before WS init
+  setTimeout(initAngelOneWebSocket, 2000);
+}, 1500);
 
 // ==============================================================================
 // secure backend API Proxy Routes wrapping Angel One Node.js SDK
@@ -181,10 +314,14 @@ app.post('/api/login', async (req, res) => {
       // Store in memory
       activeSession.clientCode = clientCode;
       activeSession.smartConnectInstance = smartConnect;
+      activeSession.feedToken = sessionData.data?.feedToken || null;
       
       // Fetch profile info to verify and store
       const profileInfo = await smartConnect.getProfile();
       activeSession.profile = profileInfo.data;
+      
+      // Start Angel One WebSocket feed now that we have a real session
+      setTimeout(initAngelOneWebSocket, 500);
 
       res.json({
         success: true,
@@ -608,16 +745,30 @@ app.get('*', (req, res) => {
 });
 
 // =============================================
-// STEP 1: Basic socket.io connection tracking
+// STEP 1 + 2: socket.io connection tracking
 // =============================================
 io.on('connection', (socket) => {
   console.log(`[WS] Client connected: ${socket.id} | Total: ${io.engine.clientsCount}`);
   socketSubscriptions.set(socket.id, new Set());
 
+  // Send current cache snapshot so the new user sees prices immediately
+  if (priceCache.size > 0) {
+    const snapshot = {};
+    priceCache.forEach((val, key) => { snapshot[key] = val.ltp; });
+    socket.emit('price_snapshot', snapshot);
+  }
+
   socket.on('disconnect', () => {
     console.log(`[WS] Client disconnected: ${socket.id} | Total: ${io.engine.clientsCount}`);
     socketSubscriptions.delete(socket.id);
   });
+});
+
+// REST endpoint — browser can query current cache if needed as fallback
+app.get('/api/ws-cache', (req, res) => {
+  const result = {};
+  priceCache.forEach((val, key) => { result[key] = val; });
+  res.json({ success: true, count: priceCache.size, data: result });
 });
 
 httpServer.listen(PORT, () => {
