@@ -569,6 +569,7 @@ app.get('/api/search-scripts', (req, res) => {
       
       const symbolUpper = item.symbol.toUpperCase();
       if (symbolUpper.endsWith('FUT') || symbolUpper.endsWith('CE') || symbolUpper.endsWith('PE')) return false;
+      if (symbolUpper.includes('INAV')) return false;
 
       const parts = symbolUpper.split('-');
       const suffix = parts.length > 1 ? parts[parts.length - 1] : 'NONE';
