@@ -485,6 +485,8 @@ document.addEventListener('DOMContentLoaded', () => {
     activePlatformUser = user;
     localStorage.setItem('activePlatformUser', JSON.stringify(user));
 
+    addedScripts = JSON.parse(localStorage.getItem('watchlist_' + activePlatformUser.email) || '[]');
+
     alert(`Welcome back, ${user.name}!`);
     updateHeaderBalance();
     
@@ -527,6 +529,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function saveWatchlist() {
+    if (activePlatformUser) {
+      localStorage.setItem('watchlist_' + activePlatformUser.email, JSON.stringify(addedScripts));
+    }
+  }
+
   function logTransaction(type, amount) {
     const txs = JSON.parse(localStorage.getItem('transactions_db') || '[]');
     txs.push({
@@ -561,6 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (activePlatformUser) {
       document.getElementById('settings-nav-text').textContent = 'Logout';
+      addedScripts = JSON.parse(localStorage.getItem('watchlist_' + activePlatformUser.email) || '[]');
       fetchPositions();
     } else {
       document.getElementById('settings-nav-text').textContent = 'Login';
@@ -1103,6 +1112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (addedScripts.some(s => s.code === code)) {
           // Remove if already added
           addedScripts = addedScripts.filter(s => s.code !== code);
+          saveWatchlist();
           btn.classList.remove('added');
           btn.innerHTML = `
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
@@ -1115,6 +1125,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const scriptData = list.find(s => s.code === code);
           if (scriptData) {
             addedScripts.push(scriptData);
+            saveWatchlist();
             btn.classList.add('added');
             btn.innerHTML = `
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 14px; height: 14px;">
@@ -1247,6 +1258,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
         const codeToDelete = script.code;
         addedScripts = addedScripts.filter(s => s.code !== codeToDelete);
+        saveWatchlist();
         
         if (selectedScript && selectedScript.code === codeToDelete) {
           selectedScript = null;
