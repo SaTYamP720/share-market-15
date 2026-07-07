@@ -1390,7 +1390,7 @@ document.addEventListener('DOMContentLoaded', () => {
             SELL <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">${q.depth.buy[0].price}</span>
           </button>
           <button class="btn btn-buy-action" style="flex: 1; height: 42px; background-color: #e6fffa; border: 1px solid #38a169; border-radius: 8px; color: #38a169; font-weight: 700; cursor: pointer; transition: all 0.2s;">
-            BUY <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">${q.ltp}</span>
+            BUY <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">@ ${q.depth.sell[0].price}</span>
           </button>
         </div>
       </div>
@@ -1517,14 +1517,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const ltp = parseFloat(q.ltp);
-      if (isNaN(ltp) || ltp <= 0) {
+      const bidPrice = q.depth && q.depth.buy && q.depth.buy.length > 0 ? parseFloat(q.depth.buy[0].price) : parseFloat(q.ltp);
+      if (isNaN(bidPrice) || bidPrice <= 0) {
         alert("Wait for live quotes to load before selling!");
         return;
       }
 
-      // Square off the open position
-      closeVirtualPosition(openPos.id, ltp);
+      // Square off the open position at Bid price
+      closeVirtualPosition(openPos.id, bidPrice);
     });
   }
 
