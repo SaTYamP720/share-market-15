@@ -449,7 +449,7 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
           percentChange: pctChange.toFixed(2)
         };
       });
-      res.json({ success: true, data: mockResults });
+      res.json({ success: true, data: mockResults, maintenanceActive: true });
     }
   } catch (error) {
     console.error("[Backend] batch marketData exception, falling back to simulation:", error.message);
@@ -477,7 +477,7 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
         percentChange: pctChange.toFixed(2)
       };
     });
-    res.json({ success: true, data: mockResults });
+    res.json({ success: true, data: mockResults, maintenanceActive: true });
   }
 });
 
