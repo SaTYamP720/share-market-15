@@ -724,17 +724,95 @@ document.addEventListener('DOMContentLoaded', () => {
         </td>
         <td class="${plClass}" style="font-weight:700;">${plSign}₹${pl.toFixed(2)}</td>
         <td>
-          <button class="btn btn-withdraw btn-squareoff-pos" data-id="${pos.id}" style="height:24px;padding:2px 8px;font-size:11px;background-color:#fff5f5;border-color:#e53e3e;color:#e53e3e;">
-            Squareoff
-          </button>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-withdraw btn-squareoff-pos" data-id="${pos.id}" style="height:24px;padding:2px 8px;font-size:11px;background-color:#fff5f5;border-color:#e53e3e;color:#e53e3e;">
+              Squareoff
+            </button>
+            <button class="btn btn-modify-sl-tgt" data-id="${pos.id}" style="height:24px;padding:2px 8px;font-size:11px;background-color:#ebf8ff;border:1px solid #3182ce;color:#3182ce;border-radius:4px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;justify-content:center;transition:all 0.2s;">
+              SL/Tgt
+            </button>
+          </div>
         </td>
       `;
 
       tr.querySelector('.btn-squareoff-pos').addEventListener('click', () => {
         closeVirtualPosition(pos.id, exitPrice, 'MANUAL');
       });
+
+      tr.querySelector('.btn-modify-sl-tgt').addEventListener('click', async () => {
+        const result = await showModifySlTgtDialog(pos);
+        if (result) {
+          const allPositions = JSON.parse(localStorage.getItem('positions_db') || '[]');
+          const idx = allPositions.findIndex(p => p.id === pos.id);
+          if (idx !== -1) {
+            allPositions[idx].stopLoss = result.stopLoss;
+            allPositions[idx].target = result.target;
+            localStorage.setItem('positions_db', JSON.stringify(allPositions));
+            showToast(`SL & Target modified for ${pos.symbol}!`, 'success');
+            fetchPositions();
+          }
+        }
+      });
       
       tbody.appendChild(tr);
+    });
+  }
+
+  function showModifySlTgtDialog(pos) {
+    return new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.style.position = 'fixed';
+      modal.style.top = '0';
+      modal.style.left = '0';
+      modal.style.width = '100%';
+      modal.style.height = '100%';
+      modal.style.background = 'rgba(0,0,0,0.4)';
+      modal.style.zIndex = '3000';
+      modal.style.display = 'flex';
+      modal.style.alignItems = 'center';
+      modal.style.justifyContent = 'center';
+
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 12px; width: 340px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 16px; border: 1px solid #e2e8f0; animation: modalFadeIn 0.2s ease;">
+          <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #1a202c;">Modify SL & Target</h3>
+          <p style="margin: 0; font-size: 12px; color: #718096; font-weight: 600; text-transform: uppercase;">${pos.symbol} (${pos.side || 'BUY'} • Qty: ${pos.quantity})</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+             <div style="display: flex; flex-direction: column; gap: 6px;">
+               <label style="font-size: 11px; font-weight: 700; color: #4a5568;">STOP-LOSS PRICE (Clear to disable)</label>
+               <input type="number" step="any" id="modify-sl-input" value="${pos.stopLoss || ''}" placeholder="e.g. ₹245.00" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%;">
+             </div>
+             <div style="display: flex; flex-direction: column; gap: 6px;">
+               <label style="font-size: 11px; font-weight: 700; color: #4a5568;">TARGET PRICE (Clear to disable)</label>
+               <input type="number" step="any" id="modify-tgt-input" value="${pos.target || ''}" placeholder="e.g. ₹265.00" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%;">
+             </div>
+          </div>
+
+          <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+            <button id="modify-cancel-btn" style="background: #edf2f7; color: #4a5568; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 12px;">Cancel</button>
+            <button id="modify-save-btn" style="background: #0b57d0; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 12px;">Save Changes</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const cancelBtn = modal.querySelector('#modify-cancel-btn');
+      const saveBtn = modal.querySelector('#modify-save-btn');
+      const slInput = modal.querySelector('#modify-sl-input');
+      const tgtInput = modal.querySelector('#modify-tgt-input');
+
+      cancelBtn.onclick = () => {
+        modal.remove();
+        resolve(null);
+      };
+
+      saveBtn.onclick = () => {
+        const slValue = slInput.value ? parseFloat(slInput.value) : null;
+        const tgtValue = tgtInput.value ? parseFloat(tgtInput.value) : null;
+        modal.remove();
+        resolve({ stopLoss: slValue, target: tgtValue });
+      };
     });
   }
 
