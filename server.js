@@ -482,6 +482,56 @@ function downloadScripMaster() {
 // Trigger download 1 second after startup
 setTimeout(downloadScripMaster, 1000);
 
+// Helper to filter items and keep only the nearest active contract (expiryDate >= today)
+function getNearestExpiryOnly(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const parsedItems = items.map(item => {
+    let expiryDate = null;
+    if (item.expiry) {
+      const clean = item.expiry.trim().toUpperCase();
+      if (clean.length >= 9) {
+        const day = parseInt(clean.substring(0, 2));
+        const monthStr = clean.substring(2, 5);
+        const year = parseInt(clean.substring(5, 9));
+        const months = {
+          JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
+          JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11
+        };
+        const month = months[monthStr];
+        if (month !== undefined && !isNaN(day) && !isNaN(year)) {
+          expiryDate = new Date(year, month, day);
+        }
+      }
+    }
+    return { item, expiryDate };
+  });
+
+  // Group by base name (name field from Scrip Master)
+  const groups = {};
+  parsedItems.forEach(entry => {
+    const name = entry.item.name || entry.item.symbol;
+    if (!groups[name]) groups[name] = [];
+    groups[name].push(entry);
+  });
+
+  const filtered = [];
+  Object.keys(groups).forEach(name => {
+    const list = groups[name];
+    // Filter to keep only those with expiryDate >= today
+    const valid = list.filter(entry => entry.expiryDate && entry.expiryDate >= today);
+    
+    if (valid.length > 0) {
+      // Sort ascending by expiryDate to find the nearest
+      valid.sort((a, b) => a.expiryDate - b.expiryDate);
+      filtered.push(valid[0].item);
+    }
+  });
+
+  return filtered;
+}
+
 app.get('/api/search-scripts', (req, res) => {
   const query = (req.query.query || '').trim().toUpperCase();
   const activeCategory = (req.query.category || 'futures').toLowerCase();
@@ -536,14 +586,10 @@ app.get('/api/search-scripts', (req, res) => {
   categoriesList.forEach(cat => {
     if (cat === 'mcx') {
       const allMcx = allMatches.filter(item => filterFn(item, 'mcx'));
-      const seen = new Set();
-      const allowedBase = ['GOLD', 'CRUDEOIL', 'COPPER', 'LEAD', 'ZINC', 'NATURALGAS', 'SILVER'];
-      allMcx.forEach(item => {
-        const symbolUpper = item.symbol.toUpperCase();
-        const matchedBase = allowedBase.find(base => symbolUpper.startsWith(base));
-        if (matchedBase) seen.add(matchedBase);
-      });
-      counts[cat] = seen.size;
+      counts[cat] = getNearestExpiryOnly(allMcx).length;
+    } else if (cat === 'futures') {
+      const allFuts = allMatches.filter(item => filterFn(item, 'futures'));
+      counts[cat] = getNearestExpiryOnly(allFuts).length;
     } else {
       counts[cat] = allMatches.filter(item => filterFn(item, cat)).length;
     }
@@ -553,19 +599,9 @@ app.get('/api/search-scripts', (req, res) => {
   let categoryResults = allMatches.filter(item => filterFn(item, activeCategory));
 
   if (activeCategory === 'mcx') {
-    const seen = new Set();
-    const uniqueList = [];
-    const allowedBase = ['GOLD', 'CRUDEOIL', 'COPPER', 'LEAD', 'ZINC', 'NATURALGAS', 'SILVER'];
-    
-    categoryResults.forEach(item => {
-      const symbolUpper = item.symbol.toUpperCase();
-      const matchedBase = allowedBase.find(base => symbolUpper.startsWith(base));
-      if (matchedBase && !seen.has(matchedBase)) {
-        seen.add(matchedBase);
-        uniqueList.push(item);
-      }
-    });
-    categoryResults = uniqueList;
+    categoryResults = getNearestExpiryOnly(categoryResults);
+  } else if (activeCategory === 'futures') {
+    categoryResults = getNearestExpiryOnly(categoryResults);
   }
 
   res.json({
