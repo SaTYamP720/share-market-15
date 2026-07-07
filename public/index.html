@@ -348,6 +348,82 @@
     </div>
   </div>
 
+  <!-- Custom Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Custom Order Placement Modal -->
+  <div class="modal-overlay" id="order-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 1600; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 12px; width: 420px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 18px; border: 1px solid #e2e8f0;">
+      <!-- Modal Header -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 12px;">
+        <h3 id="order-modal-title" style="margin: 0; font-size: 16px; font-weight: 700; color: #1a202c; display: flex; align-items: center; gap: 8px;">
+          <span id="order-modal-action-badge" style="font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 700; text-transform: uppercase;">BUY</span>
+          Order Placement
+        </h3>
+        <button id="close-order-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%; transition: background-color 0.2s;">&times;</button>
+      </div>
+
+      <!-- Scrip Summary Info Card -->
+      <div style="background: #f7fafc; padding: 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #edf2f7;">
+        <div>
+          <div id="order-modal-symbol" style="font-weight: 700; color: #2d3748; font-size: 15px;">ZINC31JULFUT</div>
+          <div id="order-modal-exchange-badge" style="font-size: 10px; color: #718096; margin-top: 3px; text-transform: uppercase; font-weight: 600;">MCX</div>
+        </div>
+        <div style="text-align: right;">
+          <div id="order-modal-price-label" style="font-size: 11px; color: #a0aec0; font-weight: 600; text-transform: uppercase;">ASK PRICE</div>
+          <div id="order-modal-price" style="font-size: 18px; font-weight: 700; color: #2d3748;">₹0.00</div>
+        </div>
+      </div>
+
+      <!-- Qty and Product Type Tabs -->
+      <div style="display: flex; gap: 16px;">
+        <div class="form-group" style="flex: 1.2; display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 11px; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px;">Quantity</label>
+          <div style="display: flex; align-items: center; position: relative;">
+            <input type="number" id="order-qty-input" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%; font-weight: 700;">
+          </div>
+          <span id="order-modal-lotsize-help" style="font-size: 10px; color: #718096; font-weight: 500;">Min lot size: 5000</span>
+        </div>
+        <div class="form-group" style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 11px; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px;">Product</label>
+          <div class="order-dialog-tabs">
+            <button class="order-dialog-tab-btn active" id="order-tab-mis" data-val="MIS">MIS (Intraday)</button>
+            <button class="order-dialog-tab-btn" id="order-tab-nrml" data-val="NRML">NRML (Delivery)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stop-Loss & Target Inputs (Bracket fields) -->
+      <div style="display: flex; gap: 16px;">
+        <div class="form-group" style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 11px; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px;">Stop-Loss (Optional)</label>
+          <input type="number" id="order-sl-input" placeholder="e.g. ₹250.00" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%;">
+        </div>
+        <div class="form-group" style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 11px; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px;">Target (Optional)</label>
+          <input type="number" id="order-target-input" placeholder="e.g. ₹270.00" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%;">
+        </div>
+      </div>
+
+      <!-- Margin Estimation and Available Balance -->
+      <div style="display: flex; flex-direction: column; gap: 6px; background: #ebf8ff; border: 1px solid #bee3f8; padding: 12px 16px; border-radius: 8px; font-size: 12.5px; color: #2b6cb0;">
+        <div style="display: flex; justify-content: space-between;">
+          <span>Required Margin:</span>
+          <span id="order-modal-margin-est" style="font-weight: 700; color: #2b6cb0;">₹0.00</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #4a5568; border-top: 1px dashed #bee3f8; padding-top: 6px; margin-top: 4px;">
+          <span>Available Wallet Balance:</span>
+          <span id="order-modal-wallet-bal" style="font-weight: 600;">₹0.00</span>
+        </div>
+      </div>
+
+      <!-- Confirm Order Button -->
+      <button id="confirm-order-btn" style="width: 100%; height: 44px; background: #38a169; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 14.5px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(56, 161, 105, 0.2);">
+        Place BUY Order
+      </button>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

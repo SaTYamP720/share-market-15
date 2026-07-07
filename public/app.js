@@ -25,6 +25,28 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedScript = null;
   let positionQuoteCache = {}; // Cache live quotes for open positions not in watchlist
 
+  // Custom Toast notification helper
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast-msg ${type}`;
+    toast.innerHTML = `
+      <div style="flex: 1;">${message.replace(/\n/g, '<br>')}</div>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto dismiss after 4 seconds
+    setTimeout(() => {
+      toast.style.animation = 'toastFadeOut 0.4s ease forwards';
+      setTimeout(() => {
+        toast.remove();
+      }, 400);
+    }, 4000);
+  }
+
   // Mock Database for scripts (categorized)
   const scriptsDb = {
     futures: [
@@ -727,9 +749,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     logTransaction('TRADE_CLOSE', pnl);
 
-    let alertMsg = `Position squared off!\n${pos.symbol} ${side} closed at ₹${exitPrice.toFixed(2)}\nP&L: ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}\nPayout: ₹${payout.toFixed(2)} credited to wallet.`;
+    let alertMsg = `Position squared off!\n${pos.symbol} ${side} closed at ₹${exitPrice.toFixed(2)}\nP&L: ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}`;
     if (penalty > 0) alertMsg += `\n⚠️ Auto Squareoff Penalty: ₹${penalty} deducted.`;
-    alert(alertMsg);
+    showToast(alertMsg, pnl >= 0 ? 'success' : 'error');
     
     updateHeaderBalance();
     fetchPositions();
@@ -1459,43 +1481,120 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     // Helper: show order dialog and return params, or null if cancelled
-    function showOrderDialog(actionLabel, priceLabel, price) {
-      const defaultQty = parseInt(selectedScript.lotsize) || 1;
-      const dialogHtml = `
-📋 ${actionLabel} Order — ${selectedScript.code}
+    function showOrderDialog(side, price) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('order-modal');
+        const actionBadge = document.getElementById('order-modal-action-badge');
+        const symbolEl = document.getElementById('order-modal-symbol');
+        const exchBadge = document.getElementById('order-modal-exchange-badge');
+        const priceLabelEl = document.getElementById('order-modal-price-label');
+        const priceEl = document.getElementById('order-modal-price');
+        const qtyInput = document.getElementById('order-qty-input');
+        const lotsizeHelp = document.getElementById('order-modal-lotsize-help');
+        const slInput = document.getElementById('order-sl-input');
+        const targetInput = document.getElementById('order-target-input');
+        const marginEst = document.getElementById('order-modal-margin-est');
+        const walletBal = document.getElementById('order-modal-wallet-bal');
+        const confirmBtn = document.getElementById('confirm-order-btn');
+        const closeBtn = document.getElementById('close-order-modal-btn');
 
-Price (${priceLabel}): ₹${price.toFixed(2)}
+        const defaultQty = parseInt(selectedScript.lotsize) || 1;
+        
+        // Reset and populate fields
+        symbolEl.textContent = selectedScript.code;
+        exchBadge.textContent = selectedScript.exchange;
+        priceEl.textContent = `₹${price.toFixed(2)}`;
+        priceLabelEl.textContent = side === 'BUY' ? 'ASK PRICE' : 'BID PRICE';
+        
+        actionBadge.textContent = side === 'BUY' ? 'BUY' : 'SELL';
+        actionBadge.style.background = side === 'BUY' ? '#e6fffa' : '#fff5f5';
+        actionBadge.style.color = side === 'BUY' ? '#38a169' : '#e53e3e';
+        
+        qtyInput.value = defaultQty;
+        lotsizeHelp.textContent = `Min lot size: ${defaultQty}`;
+        
+        slInput.value = '';
+        targetInput.value = '';
+        
+        walletBal.textContent = `₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        
+        let currentOrderType = 'MIS'; // Default product type
 
-Enter details below separated by commas:
-  Quantity, OrderType (MIS/NRML), StopLoss (optional), Target (optional)
+        // Setup product tabs
+        const tabMis = document.getElementById('order-tab-mis');
+        const tabNrml = document.getElementById('order-tab-nrml');
+        
+        tabMis.className = 'order-dialog-tab-btn active';
+        tabNrml.className = 'order-dialog-tab-btn';
+        
+        tabMis.onclick = () => {
+          tabMis.className = 'order-dialog-tab-btn active';
+          tabNrml.className = 'order-dialog-tab-btn';
+          currentOrderType = 'MIS';
+          updateCalculations();
+        };
+        
+        tabNrml.onclick = () => {
+          tabNrml.className = 'order-dialog-tab-btn active';
+          tabMis.className = 'order-dialog-tab-btn';
+          currentOrderType = 'NRML';
+          updateCalculations();
+        };
 
-Examples:
-  1, MIS               → qty=1, MIS, no SL/Target
-  5, NRML, 82000, 88000  → qty=5, NRML, SL=₹82000, TGT=₹88000
-  2, MIS, 6700          → qty=2, MIS intraday, SL=₹6700 only
+        // Live calculation updates
+        function updateCalculations() {
+          const qty = parseInt(qtyInput.value) || 0;
+          const fullValue = price * qty;
+          const requiredMargin = currentOrderType === 'MIS' ? fullValue * 0.20 : fullValue;
+          marginEst.textContent = `₹${requiredMargin.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+        
+        qtyInput.oninput = updateCalculations;
+        updateCalculations();
 
-Default lot size: ${defaultQty}`;
+        // Style the main action button
+        confirmBtn.textContent = `Place ${side === 'BUY' ? 'BUY LONG' : 'SELL SHORT'} Order`;
+        confirmBtn.style.background = side === 'BUY' ? '#38a169' : '#e53e3e';
+        confirmBtn.style.boxShadow = side === 'BUY' ? '0 4px 12px rgba(56, 161, 105, 0.2)' : '0 4px 12px rgba(229, 62, 62, 0.2)';
 
-      const input = prompt(dialogHtml, `${defaultQty}, MIS`);
-      if (input === null) return null;
+        // Open modal
+        modal.style.display = 'flex';
 
-      const parts = input.split(',').map(s => s.trim());
-      const qty = parseInt(parts[0]);
-      const orderType = (parts[1] || 'MIS').toUpperCase() === 'NRML' ? 'NRML' : 'MIS';
-      const stopLoss = parts[2] ? parseFloat(parts[2]) : null;
-      const target = parts[3] ? parseFloat(parts[3]) : null;
+        // Close functions
+        function cleanup() {
+          modal.style.display = 'none';
+          confirmBtn.onclick = null;
+          closeBtn.onclick = null;
+          qtyInput.oninput = null;
+          tabMis.onclick = null;
+          tabNrml.onclick = null;
+        }
 
-      if (isNaN(qty) || qty <= 0) {
-        alert('Invalid quantity. Please enter a positive number.');
-        return null;
-      }
+        closeBtn.onclick = () => {
+          cleanup();
+          resolve(null);
+        };
 
-      const exch = (selectedScript.exchange || '').toUpperCase();
-      if ((exch === 'NFO' || exch === 'MCX' || exch === 'CDS') && qty % defaultQty !== 0) {
-        alert(`Order Rejected: Quantity must be in multiples of the lot size (${defaultQty}) for ${selectedScript.code}.`);
-        return null;
-      }
-      return { qty, orderType, stopLoss, target };
+        confirmBtn.onclick = () => {
+          const qty = parseInt(qtyInput.value);
+          const stopLoss = slInput.value ? parseFloat(slInput.value) : null;
+          const target = targetInput.value ? parseFloat(targetInput.value) : null;
+
+          if (isNaN(qty) || qty <= 0) {
+            showToast('Please enter a valid positive quantity.', 'error');
+            return;
+          }
+
+          const exch = (selectedScript.exchange || '').toUpperCase();
+          if ((exch === 'NFO' || exch === 'MCX' || exch === 'CDS') && qty % defaultQty !== 0) {
+            showToast(`Order Rejected: Quantity must be in multiples of the lot size (${defaultQty}) for ${selectedScript.code}.`, 'error');
+            return;
+          }
+
+          cleanup();
+          resolve({ qty, orderType: currentOrderType, stopLoss, target });
+        };
+      });
     }
 
     // Helper: log rejection
@@ -1513,14 +1612,14 @@ Default lot size: ${defaultQty}`;
     }
 
     // Action clicks — BUY button
-    detailsPanel.querySelector('.btn-buy-action').addEventListener('click', () => {
-      if (!activePlatformUser) { alert('Please log in to place trades!'); return; }
+    detailsPanel.querySelector('.btn-buy-action').addEventListener('click', async () => {
+      if (!activePlatformUser) { showToast('Please log in to place trades!', 'warning'); return; }
 
       const ltp = parseFloat(q.ltp);
       const askPrice = q.depth && q.depth.sell && q.depth.sell.length > 0 ? parseFloat(q.depth.sell[0].price) : ltp;
       const bidPrice = q.depth && q.depth.buy && q.depth.buy.length > 0 ? parseFloat(q.depth.buy[0].price) : ltp;
 
-      if (isNaN(askPrice) || askPrice <= 0) { alert('Wait for live quotes to load before buying!'); return; }
+      if (isNaN(askPrice) || askPrice <= 0) { showToast('Wait for live quotes to load before buying!', 'warning'); return; }
 
       // Check if there's an open SHORT position → close it (Buy to cover)
       const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
@@ -1537,12 +1636,12 @@ Default lot size: ${defaultQty}`;
       const marketStatus = isMarketOpen(selectedScript.exchange);
       if (!marketStatus.open && !bypass) {
         logRejection('BUY', '?', `Market Closed: ${marketStatus.reason}`);
-        alert(`Order Rejected: ${marketStatus.reason}\n\n(Tip: Enable "Bypass market hours" in Profile settings to test anytime).`);
+        showToast(`Order Rejected: ${marketStatus.reason}\n\n(Tip: Enable "Bypass market hours" in Profile settings to test anytime).`, 'error');
         return;
       }
 
       // Show order dialog
-      const params = showOrderDialog('BUY LONG', 'Ask', askPrice);
+      const params = await showOrderDialog('BUY', askPrice);
       if (!params) return;
       const { qty, orderType, stopLoss, target } = params;
 
@@ -1552,12 +1651,9 @@ Default lot size: ${defaultQty}`;
 
       if (marginRequired > activePlatformUser.walletBalance) {
         logRejection('BUY', qty, `Insufficient balance (Need ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })})`);
-        alert(`Insufficient wallet balance!\nRequired margin: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nAvailable: ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+        showToast(`Insufficient wallet balance!\nRequired margin: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nAvailable: ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, 'error');
         return;
       }
-
-      const confirmMsg = `Confirm BUY Order:\n\nSymbol: ${selectedScript.code}\nSide: BUY (LONG)\nOrder Type: ${orderType}${orderType === 'MIS' ? ' (5x Leverage)' : ''}\nQuantity: ${qty}\nEntry Price (Ask): ₹${askPrice.toFixed(2)}\nFull Trade Value: ₹${fullValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nMargin Debited: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${stopLoss ? `\nStop-Loss: ₹${stopLoss.toFixed(2)}` : ''}${target ? `\nTarget: ₹${target.toFixed(2)}` : ''}\n\nProceed?`;
-      if (!confirm(confirmMsg)) return;
 
       activePlatformUser.walletBalance -= marginRequired;
       saveUserData();
@@ -1592,7 +1688,7 @@ Default lot size: ${defaultQty}`;
       }
 
       logTransaction('TRADE_BUY', -marginRequired);
-      alert(`BUY order placed!\n${selectedScript.code} LONG ${qty} units @ ₹${askPrice.toFixed(2)}\nMargin debited: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+      showToast(`BUY order placed!\n${selectedScript.code} LONG ${qty} units @ ₹${askPrice.toFixed(2)}`, 'success');
       
       updateHeaderBalance();
       fetchPositions();
@@ -1600,14 +1696,14 @@ Default lot size: ${defaultQty}`;
     });
 
     // Action clicks — SELL button
-    detailsPanel.querySelector('.btn-sell-action').addEventListener('click', () => {
-      if (!activePlatformUser) { alert('Please log in to place trades!'); return; }
+    detailsPanel.querySelector('.btn-sell-action').addEventListener('click', async () => {
+      if (!activePlatformUser) { showToast('Please log in to place trades!', 'warning'); return; }
 
       const ltp = parseFloat(q.ltp);
       const bidPrice = q.depth && q.depth.buy && q.depth.buy.length > 0 ? parseFloat(q.depth.buy[0].price) : ltp;
       const askPrice = q.depth && q.depth.sell && q.depth.sell.length > 0 ? parseFloat(q.depth.sell[0].price) : ltp;
 
-      if (isNaN(bidPrice) || bidPrice <= 0) { alert('Wait for live quotes to load before selling!'); return; }
+      if (isNaN(bidPrice) || bidPrice <= 0) { showToast('Wait for live quotes to load before selling!', 'warning'); return; }
 
       // Check if there's an open LONG position → close it (Squareoff)
       const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
@@ -1624,12 +1720,12 @@ Default lot size: ${defaultQty}`;
       const marketStatus = isMarketOpen(selectedScript.exchange);
       if (!marketStatus.open && !bypass) {
         logRejection('SELL SHORT', '?', `Market Closed: ${marketStatus.reason}`);
-        alert(`Order Rejected: ${marketStatus.reason}`);
+        showToast(`Order Rejected: ${marketStatus.reason}`, 'error');
         return;
       }
 
       // Show order dialog
-      const params = showOrderDialog('SELL SHORT', 'Bid', bidPrice);
+      const params = await showOrderDialog('SELL', bidPrice);
       if (!params) return;
       const { qty, orderType, stopLoss, target } = params;
 
@@ -1638,12 +1734,9 @@ Default lot size: ${defaultQty}`;
 
       if (marginRequired > activePlatformUser.walletBalance) {
         logRejection('SELL SHORT', qty, `Insufficient balance (Need ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })})`);
-        alert(`Insufficient wallet balance!\nRequired margin: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nAvailable: ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+        showToast(`Insufficient wallet balance!\nRequired margin: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nAvailable: ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, 'error');
         return;
       }
-
-      const confirmMsg = `Confirm SELL Order:\n\nSymbol: ${selectedScript.code}\nSide: SELL (SHORT)\nOrder Type: ${orderType}${orderType === 'MIS' ? ' (5x Leverage)' : ''}\nQuantity: ${qty}\nEntry Price (Bid): ₹${bidPrice.toFixed(2)}\nFull Trade Value: ₹${fullValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nMargin Debited: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${stopLoss ? `\nStop-Loss: ₹${stopLoss.toFixed(2)}` : ''}${target ? `\nTarget: ₹${target.toFixed(2)}` : ''}\n\nProceed?`;
-      if (!confirm(confirmMsg)) return;
 
       activePlatformUser.walletBalance -= marginRequired;
       saveUserData();
@@ -1678,7 +1771,7 @@ Default lot size: ${defaultQty}`;
       }
 
       logTransaction('TRADE_SELL_SHORT', -marginRequired);
-      alert(`SELL SHORT order placed!\n${selectedScript.code} SHORT ${qty} units @ ₹${bidPrice.toFixed(2)}\nMargin debited: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+      showToast(`SELL SHORT order placed!\n${selectedScript.code} SHORT ${qty} units @ ₹${bidPrice.toFixed(2)}`, 'success');
       
       updateHeaderBalance();
       fetchPositions();
@@ -1772,22 +1865,22 @@ Default lot size: ${defaultQty}`;
 
       if (side === 'BUY') {
         if (pos.stopLoss && bid <= parseFloat(pos.stopLoss)) {
-          alert(`🔴 Stop-Loss Triggered!\n${pos.symbol} BUY position closed at ₹${bid.toFixed(2)}\nSL was set at ₹${parseFloat(pos.stopLoss).toFixed(2)}`);
+          showToast(`🔴 Stop-Loss Triggered!\n${pos.symbol} BUY position closed at ₹${bid.toFixed(2)}\nSL was set at ₹${parseFloat(pos.stopLoss).toFixed(2)}`, 'error');
           closeVirtualPosition(pos.id, bid, 'SL_HIT');
           return;
         }
         if (pos.target && bid >= parseFloat(pos.target)) {
-          alert(`🟢 Target Hit!\n${pos.symbol} BUY position closed at ₹${bid.toFixed(2)}\nTarget was ₹${parseFloat(pos.target).toFixed(2)}`);
+          showToast(`🟢 Target Hit!\n${pos.symbol} BUY position closed at ₹${bid.toFixed(2)}\nTarget was ₹${parseFloat(pos.target).toFixed(2)}`, 'success');
           closeVirtualPosition(pos.id, bid, 'TARGET_HIT');
         }
       } else {
         if (pos.stopLoss && ask >= parseFloat(pos.stopLoss)) {
-          alert(`🔴 Stop-Loss Triggered!\n${pos.symbol} SHORT position closed at ₹${ask.toFixed(2)}\nSL was set at ₹${parseFloat(pos.stopLoss).toFixed(2)}`);
+          showToast(`🔴 Stop-Loss Triggered!\n${pos.symbol} SHORT position closed at ₹${ask.toFixed(2)}\nSL was set at ₹${parseFloat(pos.stopLoss).toFixed(2)}`, 'error');
           closeVirtualPosition(pos.id, ask, 'SL_HIT');
           return;
         }
         if (pos.target && ask <= parseFloat(pos.target)) {
-          alert(`🟢 Target Hit!\n${pos.symbol} SHORT position closed at ₹${ask.toFixed(2)}\nTarget was ₹${parseFloat(pos.target).toFixed(2)}`);
+          showToast(`🟢 Target Hit!\n${pos.symbol} SHORT position closed at ₹${ask.toFixed(2)}\nTarget was ₹${parseFloat(pos.target).toFixed(2)}`, 'success');
           closeVirtualPosition(pos.id, ask, 'TARGET_HIT');
         }
       }
