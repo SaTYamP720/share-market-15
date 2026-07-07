@@ -130,8 +130,27 @@ async function attemptAutoLogin() {
 // STEP 2: Angel One WebSocket feed connection
 // =============================================
 function getExchangeTypeInt(exchangeStr) {
-  const map = { 'NSE': 1, 'NFO': 2, 'BSE': 3, 'BFO': 4, 'MCX': 5, 'NCDEX': 7, 'CDS': 13 };
-  return map[(exchangeStr || '').toUpperCase()] || 1;
+  const clean = (exchangeStr || '').toLowerCase().trim();
+  const segMap = {
+    'nse_cm': 1,
+    'nse_fo': 2,
+    'bse_cm': 3,
+    'bse_fo': 4,
+    'mcx_fo': 5,
+    'ncx_fo': 7,
+    'cde_fo': 13
+  };
+  if (segMap[clean] !== undefined) return segMap[clean];
+
+  if (clean.startsWith('nse')) return 1;
+  if (clean.startsWith('nfo')) return 2;
+  if (clean.startsWith('bse')) return 3;
+  if (clean.startsWith('bfo')) return 4;
+  if (clean.startsWith('mcx')) return 5;
+  if (clean.startsWith('ncdex') || clean.startsWith('ncx')) return 7;
+  if (clean.startsWith('cds') || clean.startsWith('cde')) return 13;
+
+  return 1;
 }
 
 async function initAngelOneWebSocket() {
@@ -162,7 +181,11 @@ async function initAngelOneWebSocket() {
 
     wsInstance.on('tick', (tickData) => {
       if (!tickData || !tickData.token) return;
-      const tokenKey = `${tickData.exchange_type}:${tickData.token}`;
+      
+      // Clean token string (smartapi-javascript parser leaves double quotes and null characters)
+      const cleanToken = (tickData.token || '').replace(/["'\s\u0000]/g, '').trim();
+      const tokenKey = `${tickData.exchange_type}:${cleanToken}`;
+      
       const rawLtp = parseFloat(tickData.last_traded_price || 0);
       
       // Angel One WebSocket feeds send all prices as scaled integers:
@@ -178,12 +201,12 @@ async function initAngelOneWebSocket() {
 
       priceCache.set(tokenKey, {
         ltp,
-        token: tickData.token,
+        token: cleanToken,
         exchangeType: tickData.exchange_type,
         ts: Date.now()
       });
       // Broadcast to all browser clients
-      io.emit('price_tick', { key: tokenKey, ltp, token: tickData.token });
+      io.emit('price_tick', { key: tokenKey, ltp, token: cleanToken });
     });
 
     await wsInstance.connect();
