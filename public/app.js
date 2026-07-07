@@ -802,6 +802,44 @@ document.addEventListener('DOMContentLoaded', () => {
       const slInput = modal.querySelector('#modify-sl-input');
       const tgtInput = modal.querySelector('#modify-tgt-input');
 
+      // Initial lock if one is already set
+      if (slInput.value) {
+        tgtInput.disabled = true;
+        tgtInput.style.opacity = '0.5';
+        tgtInput.style.cursor = 'not-allowed';
+      }
+      if (tgtInput.value) {
+        slInput.disabled = true;
+        slInput.style.opacity = '0.5';
+        slInput.style.cursor = 'not-allowed';
+      }
+
+      slInput.oninput = () => {
+        if (slInput.value) {
+          tgtInput.value = '';
+          tgtInput.disabled = true;
+          tgtInput.style.opacity = '0.5';
+          tgtInput.style.cursor = 'not-allowed';
+        } else {
+          tgtInput.disabled = false;
+          tgtInput.style.opacity = '1';
+          tgtInput.style.cursor = 'auto';
+        }
+      };
+
+      tgtInput.oninput = () => {
+        if (tgtInput.value) {
+          slInput.value = '';
+          slInput.disabled = true;
+          slInput.style.opacity = '0.5';
+          slInput.style.cursor = 'not-allowed';
+        } else {
+          slInput.disabled = false;
+          slInput.style.opacity = '1';
+          slInput.style.cursor = 'auto';
+        }
+      };
+
       cancelBtn.onclick = () => {
         modal.remove();
         resolve(null);
@@ -1723,6 +1761,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         qtyInput.oninput = updateCalculations;
+
+        // Mutually exclusive SL/Target input handling
+        slInput.disabled = false;
+        slInput.style.opacity = '1';
+        slInput.style.cursor = 'auto';
+        targetInput.disabled = false;
+        targetInput.style.opacity = '1';
+        targetInput.style.cursor = 'auto';
+
+        slInput.oninput = () => {
+          if (slInput.value) {
+            targetInput.value = '';
+            targetInput.disabled = true;
+            targetInput.style.opacity = '0.5';
+            targetInput.style.cursor = 'not-allowed';
+          } else {
+            targetInput.disabled = false;
+            targetInput.style.opacity = '1';
+            targetInput.style.cursor = 'auto';
+          }
+        };
+
+        targetInput.oninput = () => {
+          if (targetInput.value) {
+            slInput.value = '';
+            slInput.disabled = true;
+            slInput.style.opacity = '0.5';
+            slInput.style.cursor = 'not-allowed';
+          } else {
+            slInput.disabled = false;
+            slInput.style.opacity = '1';
+            slInput.style.cursor = 'auto';
+          }
+        };
         
         // Initialize global reference
         window.currentOrderModalPrice = price;
@@ -1742,6 +1814,8 @@ document.addEventListener('DOMContentLoaded', () => {
           confirmBtn.onclick = null;
           closeBtn.onclick = null;
           qtyInput.oninput = null;
+          slInput.oninput = null;
+          targetInput.oninput = null;
           tabMis.onclick = null;
           tabNrml.onclick = null;
           window.currentOrderModalPrice = null;
