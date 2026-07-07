@@ -627,7 +627,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const matchingScript = addedScripts.find(s => s.token === pos.token);
       const liveQuote = (matchingScript && matchingScript.quote) ? matchingScript.quote
                       : positionQuoteCache[pos.token] || null;
-      const ltp = liveQuote ? parseFloat(liveQuote.ltp) : pos.entryPrice;
+
+      // Backward compat: old positions used buyPrice, new ones use entryPrice
+      const entryPrice = pos.entryPrice || pos.buyPrice || 0;
+      const ltp = liveQuote ? parseFloat(liveQuote.ltp) : entryPrice;
 
       const side = pos.side || 'BUY'; // backward compat: old positions default to BUY
 
@@ -637,12 +640,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // LONG: exit at current Bid price
         exitPrice = liveQuote && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0
           ? parseFloat(liveQuote.depth.buy[0].price) : ltp;
-        pl = (exitPrice - pos.entryPrice) * pos.quantity;
+        pl = (exitPrice - entryPrice) * pos.quantity;
       } else {
         // SHORT: exit at current Ask price
         exitPrice = liveQuote && liveQuote.depth && liveQuote.depth.sell && liveQuote.depth.sell.length > 0
           ? parseFloat(liveQuote.depth.sell[0].price) : ltp;
-        pl = (pos.entryPrice - exitPrice) * pos.quantity;
+        pl = (entryPrice - exitPrice) * pos.quantity;
       }
 
       const plClass = pl >= 0 ? 'green' : 'red';
@@ -664,7 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </td>
         <td style="color:${sideColor};font-weight:700;">${side}</td>
         <td>${pos.quantity}</td>
-        <td>₹${pos.entryPrice.toFixed(2)}</td>
+        <td>₹${entryPrice.toFixed(2)}</td>
         <td>₹${exitPrice.toFixed(2)}</td>
         <td style="font-size:10px;color:#718096;">
           <div>${slText}</div>
