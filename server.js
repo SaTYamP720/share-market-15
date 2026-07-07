@@ -563,12 +563,17 @@ app.get('/api/search-scripts', (req, res) => {
     } else if (cat === 'us-stocks' || cat === 'us-index' || cat === 'comex') {
       return false; // Not supported by Angel One API
     } else {
-      // Equities (only keep tradeable shares, ignore indices which have non-empty instrumenttype like 'AMXIDX')
-      return (item.exch_seg === 'NSE' || item.exch_seg === 'BSE') && 
-             item.instrumenttype === '' &&
-             !item.symbol.endsWith('FUT') && 
-             !item.symbol.endsWith('CE') && 
-             !item.symbol.endsWith('PE');
+      // Equities (only keep tradeable main-board shares: EQ, BE, or no hyphen suffix)
+      if (item.exch_seg !== 'NSE' && item.exch_seg !== 'BSE') return false;
+      if (item.instrumenttype !== '') return false;
+      
+      const symbolUpper = item.symbol.toUpperCase();
+      if (symbolUpper.endsWith('FUT') || symbolUpper.endsWith('CE') || symbolUpper.endsWith('PE')) return false;
+
+      const parts = symbolUpper.split('-');
+      const suffix = parts.length > 1 ? parts[parts.length - 1] : 'NONE';
+      const allowedSuffixes = ['EQ', 'BE', 'NONE'];
+      return allowedSuffixes.includes(suffix);
     }
   };
 
