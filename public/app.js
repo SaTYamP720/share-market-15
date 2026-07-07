@@ -908,30 +908,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tbody.innerHTML = '';
     userPos.forEach(pos => {
+      const entrySide = pos.side || 'BUY';
+      const entryPrice = pos.entryPrice || pos.buyPrice || 0;
+      const entryVal = entryPrice * pos.quantity;
+      const entrySideColor = entrySide === 'BUY' ? '#38a169' : '#e53e3e';
+
+      // Entry transaction row
       const tr = document.createElement('tr');
-      const val = pos.buyPrice * pos.quantity;
       tr.innerHTML = `
         <td>${pos.createdAt || '--'}</td>
         <td class="bold">${pos.symbol}</td>
         <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${pos.exchange}</span></td>
-        <td style="color: #38a169; font-weight: 600;">BUY</td>
+        <td style="color: ${entrySideColor}; font-weight: 600;">${entrySide}</td>
         <td>${pos.quantity}</td>
-        <td>₹${pos.buyPrice.toFixed(2)}</td>
-        <td>₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+        <td>₹${entryPrice.toFixed(2)}</td>
+        <td>₹${entryVal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
       `;
       tbody.appendChild(tr);
 
+      // Exit transaction row (if closed)
       if (pos.status === 'CLOSED') {
+        const exitSide = entrySide === 'BUY' ? 'SELL' : 'BUY';
+        const exitSideColor = exitSide === 'BUY' ? '#38a169' : '#e53e3e';
+        const exitPrice = pos.closePrice || 0;
+        const exitVal = exitPrice * pos.quantity;
+        
         const trClose = document.createElement('tr');
-        const closeVal = pos.closePrice * pos.quantity;
         trClose.innerHTML = `
           <td>${pos.createdAt || '--'}</td>
           <td class="bold">${pos.symbol}</td>
           <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${pos.exchange}</span></td>
-          <td style="color: #e53e3e; font-weight: 600;">SELL</td>
+          <td style="color: ${exitSideColor}; font-weight: 600;">${exitSide}</td>
           <td>${pos.quantity}</td>
-          <td>₹${pos.closePrice ? pos.closePrice.toFixed(2) : '--'}</td>
-          <td>₹${closeVal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+          <td>₹${exitPrice.toFixed(2)}</td>
+          <td>₹${exitVal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
         `;
         tbody.appendChild(trClose);
       }
