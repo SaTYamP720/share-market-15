@@ -928,7 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
-    const closedPositions = positions.filter(p => p.userEmail === activePlatformUser.email && p.status === 'CLOSED');
+    const closedPositions = positions.filter(p => p.userEmail === activePlatformUser.email && p.status === 'CLOSED').reverse();
 
     if (closedPositions.length === 0) {
       tbody.innerHTML = `
@@ -1144,12 +1144,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    tbody.innerHTML = '';
     let runningBalance = 0;
+    const rowsData = [];
     
     userTxs.forEach(t => {
-      const tr = document.createElement('tr');
-      
       let particulars = '';
       let debit = '--';
       let credit = '--';
@@ -1165,7 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (t.type === 'TRADE_BUY' || t.type === 'TRADE_SELL_SHORT') {
         particulars = t.type === 'TRADE_BUY' ? 'Virtual Trade BUY margin debit' : 'Virtual Trade SELL SHORT margin debit';
         debit = `₹${Math.abs(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-        runningBalance += t.amount; // amount is negative, so it subtracts
+        runningBalance += t.amount;
       } else if (t.type === 'TRADE_CLOSE') {
         const pnlNum = parseFloat(t.pnl);
         const pnlText = !isNaN(pnlNum) ? ` (P&L: ${pnlNum >= 0 ? '+' : ''}₹${pnlNum.toFixed(2)})` : '';
@@ -1178,12 +1176,27 @@ document.addEventListener('DOMContentLoaded', () => {
         runningBalance += t.amount;
       }
 
+      rowsData.push({
+        createdAt: t.createdAt || '--',
+        particulars,
+        debit,
+        credit,
+        balance: runningBalance
+      });
+    });
+
+    // Reverse list so that latest transaction appears at the top
+    rowsData.reverse();
+
+    tbody.innerHTML = '';
+    rowsData.forEach(row => {
+      const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${t.createdAt || '--'}</td>
-        <td>${particulars}</td>
-        <td style="color: #e53e3e;">${debit}</td>
-        <td style="color: #38a169;">${credit}</td>
-        <td class="bold" style="color: #0b57d0;">₹${runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <td>${row.createdAt}</td>
+        <td>${row.particulars}</td>
+        <td style="color: #e53e3e;">${row.debit}</td>
+        <td style="color: #38a169;">${row.credit}</td>
+        <td class="bold" style="color: #0b57d0;">₹${row.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
       `;
       tbody.appendChild(tr);
     });
