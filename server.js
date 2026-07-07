@@ -163,10 +163,19 @@ async function initAngelOneWebSocket() {
     wsInstance.on('tick', (tickData) => {
       if (!tickData || !tickData.token) return;
       const tokenKey = `${tickData.exchange_type}:${tickData.token}`;
-      // last_traded_price comes as string from the parser, convert to number
-      // Angel One sends price * 100 for stocks, already correct for commodities
       const rawLtp = parseFloat(tickData.last_traded_price || 0);
-      const ltp = rawLtp > 100000 ? rawLtp / 100 : rawLtp; // divide by 100 for equity
+      
+      // Angel One WebSocket feeds send all prices as scaled integers:
+      // - CDS (Currency) is multiplied by 10000 (4 decimal places)
+      // - NSE, BSE, NFO, BFO, MCX, NCDEX are multiplied by 100 (2 decimal places)
+      let ltp = rawLtp;
+      const exchType = parseInt(tickData.exchange_type);
+      if (exchType === 13) {
+        ltp = rawLtp / 10000;
+      } else {
+        ltp = rawLtp / 100;
+      }
+
       priceCache.set(tokenKey, {
         ltp,
         token: tickData.token,
