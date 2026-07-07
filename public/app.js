@@ -3,13 +3,40 @@
 // =============================================
 const socket = io();
 
+// STEP 3: Live price map — token key "EXCHANGETYPE:TOKEN" => ltp
+const wsLivePrices = {};
+
 socket.on('connect', () => {
   console.log('[WS] Connected to server. Socket ID:', socket.id);
+  // Re-subscribe to all watchlist tokens on (re)connect
+  wsSubscribeAll();
 });
 
 socket.on('disconnect', () => {
   console.log('[WS] Disconnected from server.');
 });
+
+// Incoming: full snapshot when first connecting
+socket.on('price_snapshot', (snapshot) => {
+  Object.assign(wsLivePrices, snapshot);
+  console.log(`[WS] Received price snapshot: ${Object.keys(snapshot).length} tokens`);
+});
+
+// Incoming: live price tick for a single token
+socket.on('price_tick', ({ key, ltp }) => {
+  wsLivePrices[key] = ltp;
+  // Refresh visible price cells with this token in real-time
+  document.querySelectorAll(`[data-ws-key="${key}"]`).forEach(el => {
+    el.textContent = '₹' + parseFloat(ltp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  });
+});
+
+// Subscribe ALL current watchlist tokens to the server
+function wsSubscribeAll() {
+  if (!window._addedScriptsRef || window._addedScriptsRef.length === 0) return;
+  const tokens = window._addedScriptsRef.map(s => ({ exchange: s.exchange, token: s.token }));
+  socket.emit('ws_subscribe', { tokens });
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   // Navigation & Tab elements
@@ -595,6 +622,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activePlatformUser) {
       localStorage.setItem('watchlist_' + activePlatformUser.email, JSON.stringify(addedScripts));
     }
+    // Keep global ref so wsSubscribeAll can access it outside DOMContentLoaded scope
+    window._addedScriptsRef = addedScripts;
   }
 
   function logTransaction(type, amount, pnl = null) {
@@ -633,6 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activePlatformUser) {
       document.getElementById('settings-nav-text').textContent = 'Logout';
       addedScripts = JSON.parse(localStorage.getItem('watchlist_' + activePlatformUser.email) || '[]');
+      window._addedScriptsRef = addedScripts;
+      // STEP 3: Subscribe all watchlist tokens on startup
+      wsSubscribeAll();
       fetchPositions();
     } else {
       document.getElementById('settings-nav-text').textContent = 'Login';
@@ -1373,8 +1405,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (addedScripts.some(s => s.code === code)) {
           // Remove if already added
+          const removedScript = addedScripts.find(s => s.code === code);
           addedScripts = addedScripts.filter(s => s.code !== code);
           saveWatchlist();
+          // STEP 3: Unsubscribe this token from Angel One WebSocket feed
+          if (removedScript) {
+            socket.emit('ws_unsubscribe', { tokens: [{ exchange: removedScript.exchange, token: removedScript.token }] });
+          }
           btn.classList.remove('added');
           btn.innerHTML = `
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
@@ -1388,6 +1425,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (scriptData) {
             addedScripts.push(scriptData);
             saveWatchlist();
+            // STEP 3: Subscribe this token to Angel One WebSocket feed
+            socket.emit('ws_subscribe', { tokens: [{ exchange: scriptData.exchange, token: scriptData.token }] });
             btn.classList.add('added');
             btn.innerHTML = `
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 14px; height: 14px;">

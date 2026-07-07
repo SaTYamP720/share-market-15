@@ -745,7 +745,7 @@ app.get('*', (req, res) => {
 });
 
 // =============================================
-// STEP 1 + 2: socket.io connection tracking
+// STEP 1 + 2 + 3: socket.io connection + dynamic subscribe
 // =============================================
 io.on('connection', (socket) => {
   console.log(`[WS] Client connected: ${socket.id} | Total: ${io.engine.clientsCount}`);
@@ -758,8 +758,55 @@ io.on('connection', (socket) => {
     socket.emit('price_snapshot', snapshot);
   }
 
+  // STEP 3: Browser tells server which tokens to subscribe to
+  // payload: { tokens: [ { exchange: 'NSE', token: '1234' }, ... ] }
+  socket.on('ws_subscribe', ({ tokens }) => {
+    if (!Array.isArray(tokens) || tokens.length === 0) return;
+    const mySubscriptions = socketSubscriptions.get(socket.id);
+    const toSubscribe = [];
+    for (const { exchange, token } of tokens) {
+      const exchType = getExchangeTypeInt(exchange);
+      const key = `${exchType}:${token}`;
+      if (!mySubscriptions.has(key)) {
+        mySubscriptions.add(key);
+        toSubscribe.push({ exchangeType: exchType, token: String(token) });
+        // If already in cache, send immediately to this socket
+        if (priceCache.has(key)) {
+          socket.emit('price_tick', { key, ltp: priceCache.get(key).ltp, token });
+        }
+      }
+    }
+    if (toSubscribe.length > 0) wsSubscribeTokens(toSubscribe);
+  });
+
+  // STEP 3: Browser tells server which tokens to unsubscribe
+  socket.on('ws_unsubscribe', ({ tokens }) => {
+    if (!Array.isArray(tokens) || tokens.length === 0) return;
+    const mySubscriptions = socketSubscriptions.get(socket.id);
+    const toUnsub = [];
+    for (const { exchange, token } of tokens) {
+      const exchType = getExchangeTypeInt(exchange);
+      const key = `${exchType}:${token}`;
+      if (mySubscriptions.has(key)) {
+        mySubscriptions.delete(key);
+        toUnsub.push({ exchangeType: exchType, token: String(token) });
+      }
+    }
+    if (toUnsub.length > 0) wsUnsubscribeTokens(toUnsub);
+  });
+
   socket.on('disconnect', () => {
     console.log(`[WS] Client disconnected: ${socket.id} | Total: ${io.engine.clientsCount}`);
+    // Auto-unsubscribe all tokens this socket was watching
+    const mySubscriptions = socketSubscriptions.get(socket.id);
+    if (mySubscriptions && mySubscriptions.size > 0) {
+      const toUnsub = [];
+      mySubscriptions.forEach(key => {
+        const [exchType, token] = key.split(':');
+        toUnsub.push({ exchangeType: parseInt(exchType), token });
+      });
+      wsUnsubscribeTokens(toUnsub);
+    }
     socketSubscriptions.delete(socket.id);
   });
 });
