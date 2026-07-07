@@ -199,6 +199,8 @@ async function initAngelOneWebSocket() {
         ltp = rawLtp / 100;
       }
 
+      console.log(`[AngelWS] Tick - Token: ${cleanToken} | ExchangeType: ${tickData.exchange_type} | RawLTP: ${rawLtp} | ComputedLTP: ${ltp}`);
+
       priceCache.set(tokenKey, {
         ltp,
         token: cleanToken,
