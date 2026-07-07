@@ -616,8 +616,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Find matching quote from cached results in addedScripts or load placeholder
       const matchingScript = addedScripts.find(s => s.token === pos.token);
       const ltp = matchingScript && matchingScript.quote ? parseFloat(matchingScript.quote.ltp) : pos.buyPrice;
+      const bidPrice = matchingScript && matchingScript.quote && matchingScript.quote.depth && matchingScript.quote.depth.buy && matchingScript.quote.depth.buy.length > 0
+                       ? parseFloat(matchingScript.quote.depth.buy[0].price) : ltp;
       
-      const pl = (ltp - pos.buyPrice) * pos.quantity;
+      const exitPrice = bidPrice;
+      const pl = (exitPrice - pos.buyPrice) * pos.quantity;
       const plClass = pl >= 0 ? 'green' : 'red';
       const plSign = pl >= 0 ? '+' : '';
 
@@ -628,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <td style="color: #38a169; font-weight: 600;">BUY</td>
         <td>${pos.quantity}</td>
         <td>${pos.buyPrice.toFixed(2)}</td>
-        <td>${ltp.toFixed(2)}</td>
+        <td>${exitPrice.toFixed(2)}</td>
         <td class="${plClass}" style="font-weight: 600;">${plSign}${pl.toFixed(2)}</td>
         <td>
           <button class="btn btn-withdraw btn-squareoff-pos" data-id="${pos.id}" style="height: 24px; padding: 2px 8px; font-size: 11px; background-color: #fff5f5; border-color: #e53e3e; color: #e53e3e;">
@@ -639,9 +642,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Squareoff / Close position event listener
       tr.querySelector('.btn-squareoff-pos').addEventListener('click', () => {
-        closeVirtualPosition(pos.id, ltp);
+        closeVirtualPosition(pos.id, exitPrice);
       });
-
+      
       tbody.appendChild(tr);
     });
   }
@@ -1401,7 +1404,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const ltp = parseFloat(q.ltp);
-      if (isNaN(ltp) || ltp <= 0) {
+      const askPrice = q.depth && q.depth.sell && q.depth.sell.length > 0 ? parseFloat(q.depth.sell[0].price) : ltp;
+
+      if (isNaN(askPrice) || askPrice <= 0) {
         alert("Wait for live quotes to load before buying!");
         return;
       }
@@ -1435,7 +1440,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const value = ltp * quantity;
+      const value = askPrice * quantity;
       const commission = 0; // Removed 10% fee
       const totalCost = value;
 
@@ -1459,7 +1464,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const confirmMsg = `Confirm BUY Order:\n\n` +
                          `Symbol: ${selectedScript.code}\n` +
                          `Quantity: ${quantity}\n` +
-                         `Price: ₹${ltp.toFixed(2)}\n` +
+                         `Price (Ask): ₹${askPrice.toFixed(2)}\n` +
                          `Trade Value: ₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\n\n` +
                          `Proceed?`;
       if (!confirm(confirmMsg)) return;
@@ -1477,7 +1482,7 @@ document.addEventListener('DOMContentLoaded', () => {
         name: selectedScript.name,
         exchange: selectedScript.exchange,
         token: selectedScript.token,
-        buyPrice: ltp,
+        buyPrice: askPrice,
         quantity: quantity,
         tradeValue: value,
         commissionPaid: commission,
@@ -1664,7 +1669,9 @@ document.addEventListener('DOMContentLoaded', () => {
     openPositions.forEach(pos => {
       const matchingScript = addedScripts.find(s => s.token === pos.token);
       const ltp = matchingScript && matchingScript.quote ? parseFloat(matchingScript.quote.ltp) : pos.buyPrice;
-      livePnl += (ltp - pos.buyPrice) * pos.quantity;
+      const bidPrice = matchingScript && matchingScript.quote && matchingScript.quote.depth && matchingScript.quote.depth.buy && matchingScript.quote.depth.buy.length > 0
+                       ? parseFloat(matchingScript.quote.depth.buy[0].price) : ltp;
+      livePnl += (bidPrice - pos.buyPrice) * pos.quantity;
     });
 
     const closedPositions = userPositions.filter(p => p.status === 'CLOSED');
