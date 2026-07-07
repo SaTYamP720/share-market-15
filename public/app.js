@@ -1872,6 +1872,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pos.target && bid >= parseFloat(pos.target)) {
           showToast(`🟢 Target Hit!\n${pos.symbol} BUY position closed at ₹${bid.toFixed(2)}\nTarget was ₹${parseFloat(pos.target).toFixed(2)}`, 'success');
           closeVirtualPosition(pos.id, bid, 'TARGET_HIT');
+          return;
         }
       } else {
         if (pos.stopLoss && ask >= parseFloat(pos.stopLoss)) {
@@ -1882,6 +1883,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pos.target && ask <= parseFloat(pos.target)) {
           showToast(`🟢 Target Hit!\n${pos.symbol} SHORT position closed at ₹${ask.toFixed(2)}\nTarget was ₹${parseFloat(pos.target).toFixed(2)}`, 'success');
           closeVirtualPosition(pos.id, ask, 'TARGET_HIT');
+          return;
         }
       }
     });
