@@ -810,6 +810,12 @@ document.addEventListener('DOMContentLoaded', () => {
       saveBtn.onclick = () => {
         const slValue = slInput.value ? parseFloat(slInput.value) : null;
         const tgtValue = tgtInput.value ? parseFloat(tgtInput.value) : null;
+
+        if (slValue !== null && tgtValue !== null) {
+          showToast('Please set either Stop-Loss or Target, not both together.', 'warning');
+          return;
+        }
+
         modal.remove();
         resolve({ stopLoss: slValue, target: tgtValue });
       };
@@ -1754,6 +1760,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
           if (isNaN(qty) || qty <= 0) {
             showToast('Please enter a valid positive quantity.', 'error');
+            return;
+          }
+
+          if (stopLoss !== null && target !== null) {
+            showToast('Please set either Stop-Loss or Target, not both together.', 'warning');
             return;
           }
 
