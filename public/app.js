@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let userName = null;
   let addedScripts = [];
   let selectedScript = null;
+  let positionQuoteCache = {}; // Cache live quotes for open positions not in watchlist
 
   // Mock Database for scripts (categorized)
   const scriptsDb = {
@@ -622,11 +623,13 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = '';
     
     openPositions.forEach(pos => {
-      // Find matching quote from cached results in addedScripts or load placeholder
+      // Find matching quote from watchlist scripts OR position quote cache
       const matchingScript = addedScripts.find(s => s.token === pos.token);
-      const ltp = matchingScript && matchingScript.quote ? parseFloat(matchingScript.quote.ltp) : pos.buyPrice;
-      const bidPrice = matchingScript && matchingScript.quote && matchingScript.quote.depth && matchingScript.quote.depth.buy && matchingScript.quote.depth.buy.length > 0
-                       ? parseFloat(matchingScript.quote.depth.buy[0].price) : ltp;
+      const liveQuote = (matchingScript && matchingScript.quote) ? matchingScript.quote
+                      : positionQuoteCache[pos.token] || null;
+      const ltp = liveQuote ? parseFloat(liveQuote.ltp) : pos.buyPrice;
+      const bidPrice = liveQuote && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0
+                       ? parseFloat(liveQuote.depth.buy[0].price) : ltp;
       
       const exitPrice = bidPrice;
       const pl = (exitPrice - pos.buyPrice) * pos.quantity;
@@ -1505,6 +1508,13 @@ document.addEventListener('DOMContentLoaded', () => {
       positions.push(newPos);
       localStorage.setItem('positions_db', JSON.stringify(positions));
 
+      // Auto-add script to watchlist if not already there (needed for live P&L ticking)
+      if (!addedScripts.some(s => s.code === selectedScript.code)) {
+        addedScripts.push(selectedScript);
+        addedCounter.textContent = addedScripts.length;
+        saveWatchlist();
+      }
+
       // Log transaction
       logTransaction('TRADE_BUY', -totalCost);
 
@@ -1649,6 +1659,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const script = addedScripts.find(s => s.token === qData.symbolToken && s.exchange.toUpperCase() === qData.exchange.toUpperCase());
             if (script) {
               script.quote = qData;
+            } else {
+              // Store quote for open positions whose script isn't in watchlist
+              positionQuoteCache[qData.symbolToken] = qData;
             }
           });
           
@@ -1680,9 +1693,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const openPositions = userPositions.filter(p => p.status === 'OPEN');
     openPositions.forEach(pos => {
       const matchingScript = addedScripts.find(s => s.token === pos.token);
-      const ltp = matchingScript && matchingScript.quote ? parseFloat(matchingScript.quote.ltp) : pos.buyPrice;
-      const bidPrice = matchingScript && matchingScript.quote && matchingScript.quote.depth && matchingScript.quote.depth.buy && matchingScript.quote.depth.buy.length > 0
-                       ? parseFloat(matchingScript.quote.depth.buy[0].price) : ltp;
+      const liveQuote = (matchingScript && matchingScript.quote) ? matchingScript.quote
+                      : positionQuoteCache[pos.token] || null;
+      const ltp = liveQuote ? parseFloat(liveQuote.ltp) : pos.buyPrice;
+      const bidPrice = liveQuote && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0
+                       ? parseFloat(liveQuote.depth.buy[0].price) : ltp;
       livePnl += (bidPrice - pos.buyPrice) * pos.quantity;
     });
 
