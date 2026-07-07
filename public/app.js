@@ -1434,6 +1434,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const colorStyle = isPositive ? 'color: #38a169;' : 'color: #e53e3e;';
     const sign = isPositive ? '+' : '';
 
+    const rawBid = q.depth && q.depth.buy && q.depth.buy[0] ? parseFloat(q.depth.buy[0].price) : 0;
+    const rawAsk = q.depth && q.depth.sell && q.depth.sell[0] ? parseFloat(q.depth.sell[0].price) : 0;
+    const bidVal = rawBid > 0 ? rawBid : (parseFloat(q.ltp) || 0);
+    const askVal = rawAsk > 0 ? rawAsk : (parseFloat(q.ltp) || 0);
+
+    const exch = (selectedScript.exchange || '').toUpperCase();
+    const now = new Date();
+    const day = now.getDay();
+    const hr = now.getHours();
+    const min = now.getMinutes();
+    const timeVal = hr * 60 + min;
+    
+    let isClosed = false;
+    if (day === 0 || day === 6) {
+      isClosed = true;
+    } else {
+      if (exch === 'MCX') {
+        isClosed = (timeVal < 540 || timeVal >= 1410);
+      } else {
+        isClosed = (timeVal < 555 || timeVal >= 930);
+      }
+    }
+
+    const marketStatusBadge = isClosed 
+      ? `<span style="font-size: 10px; padding: 2px 6px; font-weight: 700; border-radius: 4px; background-color: #fff5f5; color: #e53e3e; border: 1px solid #fed7d7; margin-left: 6px; display: inline-flex; align-items: center;">CLOSED</span>`
+      : `<span style="font-size: 10px; padding: 2px 6px; font-weight: 700; border-radius: 4px; background-color: #f0fff4; color: #38a169; border: 1px solid #c6f6d5; margin-left: 6px; display: inline-flex; align-items: center;">LIVE</span>`;
+
     // Calculate mock coordinates for a smooth Bezier sparkline path
     const open = parseFloat(q.open) || 0;
     const high = parseFloat(q.high) || 0;
@@ -1460,7 +1487,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <h3 style="font-size: 18px; font-weight: 700; color: #1a202c; margin: 0;">${selectedScript.code}</h3>
             <span style="font-size: 11px; color: #718096; text-transform: uppercase;">${selectedScript.name}</span>
           </div>
-          <span class="watchlist-pill" style="font-size: 11px; padding: 3px 8px; font-weight: 600;">${selectedScript.exchange}</span>
+          <div style="display: flex; align-items: center;">
+            <span class="watchlist-pill" style="font-size: 11px; padding: 3px 8px; font-weight: 600;">${selectedScript.exchange}</span>
+            ${marketStatusBadge}
+          </div>
         </div>
 
         <!-- Price Display -->
@@ -1472,8 +1502,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div style="text-align: right; font-size: 12px;">
-            <div style="color: #718096; margin-bottom: 2px;">BID <span style="color: #38a169; font-weight: 600; margin-left: 4px;">${q.depth.buy[0].price}</span></div>
-            <div style="color: #718096;">ASK <span style="color: #e53e3e; font-weight: 600; margin-left: 4px;">${q.depth.sell[0].price}</span></div>
+            <div style="color: #718096; margin-bottom: 2px;">BID <span style="color: #38a169; font-weight: 600; margin-left: 4px;">₹${bidVal.toFixed(2)}</span></div>
+            <div style="color: #718096;">ASK <span style="color: #e53e3e; font-weight: 600; margin-left: 4px;">₹${askVal.toFixed(2)}</span></div>
           </div>
         </div>
 
@@ -1529,10 +1559,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Buy / Sell Action buttons -->
         <div style="display: flex; gap: 12px; margin-top: 10px;">
           <button class="btn btn-sell-action" style="flex: 1; height: 42px; background-color: #fff5f5; border: 1px solid #e53e3e; border-radius: 8px; color: #e53e3e; font-weight: 700; cursor: pointer; transition: all 0.2s;">
-            SELL <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">${q.depth.buy[0].price}</span>
+            SELL <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">₹${bidVal.toFixed(2)}</span>
           </button>
           <button class="btn btn-buy-action" style="flex: 1; height: 42px; background-color: #e6fffa; border: 1px solid #38a169; border-radius: 8px; color: #38a169; font-weight: 700; cursor: pointer; transition: all 0.2s;">
-            BUY <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">@ ${q.depth.sell[0].price}</span>
+            BUY <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">@ ₹${askVal.toFixed(2)}</span>
           </button>
         </div>
       </div>
