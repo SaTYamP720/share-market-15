@@ -2284,15 +2284,6 @@ document.addEventListener('DOMContentLoaded', () => {
           body: JSON.stringify({ scripts: merged })
         });
         const result = await response.json();
-
-        // Check if broker API has dropped and maintenance mode is triggered
-        if (result.maintenanceActive && !localStorage.getItem('admin_bypass_maintenance')) {
-          showMaintenanceOverlay();
-          return;
-        } else {
-          const overlay = document.getElementById('maintenance-overlay');
-          if (overlay) overlay.remove();
-        }
         
         if (result.success && result.data) {
           result.data.forEach(qData => {
@@ -2324,58 +2315,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("Live ticker polling exception:", e);
       }
     }, 500);
-  }
-
-  function showMaintenanceOverlay() {
-    if (document.getElementById('maintenance-overlay')) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'maintenance-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100vw';
-    overlay.style.height = '100vh';
-    overlay.style.background = 'rgba(26, 32, 44, 0.96)';
-    overlay.style.backdropFilter = 'blur(10px)';
-    overlay.style.zIndex = '99999';
-    overlay.style.display = 'flex';
-    overlay.style.flexDirection = 'column';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.color = '#fff';
-    overlay.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-    overlay.style.padding = '20px';
-    overlay.style.textAlign = 'center';
-
-    overlay.innerHTML = `
-      <div style="background: #2d3748; border: 1px solid #4a5568; border-radius: 16px; max-width: 450px; padding: 40px 32px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 24px; align-items: center; border: 1px solid #e2e8f0; animation: modalFadeIn 0.3s ease;">
-        <div style="font-size: 54px; line-height: 1;">⚠️</div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.5px;">SYSTEM MAINTENANCE</h2>
-          <p style="margin: 0; font-size: 13px; color: #a0aec0; line-height: 1.6;">The broker API feed (Angel One) has disconnected. Live rates and order routing are suspended until the API is restored.</p>
-        </div>
-        <div style="height: 1px; width: 100%; background: #4a5568;"></div>
-        <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-          <button id="btn-admin-bypass" style="width: 100%; height: 42px; background: #e53e3e; border: none; border-radius: 8px; color: white; font-weight: 700; font-size: 13px; cursor: pointer; transition: background 0.2s;">Admin Bypass (Demo Mode)</button>
-          <span style="font-size: 11px; color: #718096; font-weight: 600;">Contact admin@sharemarket18.com for details</span>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    const bypassBtn = overlay.querySelector('#btn-admin-bypass');
-    bypassBtn.onclick = () => {
-      const code = prompt("Enter Admin Bypass Code to activate Demo Mode:");
-      if (code === 'admin123') {
-        localStorage.setItem('admin_bypass_maintenance', 'true');
-        overlay.remove();
-        showToast("Admin Bypass Activated. Demo mode running.", "success");
-      } else if (code !== null) {
-        alert("Invalid Admin Bypass Code!");
-      }
-    };
   }
 
   function updateTopbarStats() {
