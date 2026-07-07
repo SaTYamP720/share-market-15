@@ -1102,7 +1102,8 @@ document.addEventListener('DOMContentLoaded', () => {
           name: item.name,
           expiry: item.expiry ? `Exp: ${item.expiry}` : item.exch_seg,
           exchange: item.exch_seg,
-          token: item.token
+          token: item.token,
+          lotsize: item.lotsize || 1
         }));
 
         // Dynamically update category tab counts to show actual results
@@ -1486,6 +1487,12 @@ Default lot size: ${defaultQty}`;
 
       if (isNaN(qty) || qty <= 0) {
         alert('Invalid quantity. Please enter a positive number.');
+        return null;
+      }
+
+      const exch = (selectedScript.exchange || '').toUpperCase();
+      if ((exch === 'NFO' || exch === 'MCX' || exch === 'CDS') && qty % defaultQty !== 0) {
+        alert(`Order Rejected: Quantity must be in multiples of the lot size (${defaultQty}) for ${selectedScript.code}.`);
         return null;
       }
       return { qty, orderType, stopLoss, target };
