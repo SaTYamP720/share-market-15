@@ -592,7 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!activePlatformUser) {
       tbody.innerHTML = `
         <tr class="empty-state-row">
-          <td colspan="8" class="empty-state-cell">
+          <td colspan="9" class="empty-state-cell">
             <div class="empty-state-container">
               <p>Please log in to view positions</p>
             </div>
@@ -608,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (openPositions.length === 0) {
       tbody.innerHTML = `
         <tr class="empty-state-row">
-          <td colspan="8" class="empty-state-cell">
+          <td colspan="9" class="empty-state-cell">
             <div class="empty-state-container">
               <p>No open positions</p>
             </div>
@@ -623,45 +623,70 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = '';
     
     openPositions.forEach(pos => {
-      // Find matching quote from watchlist scripts OR position quote cache
+      // Resolve live quote from watchlist or cache
       const matchingScript = addedScripts.find(s => s.token === pos.token);
       const liveQuote = (matchingScript && matchingScript.quote) ? matchingScript.quote
                       : positionQuoteCache[pos.token] || null;
-      const ltp = liveQuote ? parseFloat(liveQuote.ltp) : pos.buyPrice;
-      const bidPrice = liveQuote && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0
-                       ? parseFloat(liveQuote.depth.buy[0].price) : ltp;
-      
-      const exitPrice = bidPrice;
-      const pl = (exitPrice - pos.buyPrice) * pos.quantity;
+      const ltp = liveQuote ? parseFloat(liveQuote.ltp) : pos.entryPrice;
+
+      const side = pos.side || 'BUY'; // backward compat: old positions default to BUY
+
+      let exitPrice;
+      let pl;
+      if (side === 'BUY') {
+        // LONG: exit at current Bid price
+        exitPrice = liveQuote && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0
+          ? parseFloat(liveQuote.depth.buy[0].price) : ltp;
+        pl = (exitPrice - pos.entryPrice) * pos.quantity;
+      } else {
+        // SHORT: exit at current Ask price
+        exitPrice = liveQuote && liveQuote.depth && liveQuote.depth.sell && liveQuote.depth.sell.length > 0
+          ? parseFloat(liveQuote.depth.sell[0].price) : ltp;
+        pl = (pos.entryPrice - exitPrice) * pos.quantity;
+      }
+
       const plClass = pl >= 0 ? 'green' : 'red';
       const plSign = pl >= 0 ? '+' : '';
+      const sideColor = side === 'BUY' ? '#38a169' : '#e53e3e';
+      const orderType = pos.orderType || 'NRML';
+      const orderTypeBg = orderType === 'MIS' ? '#ebf4ff' : '#f0fff4';
+      const orderTypeColor = orderType === 'MIS' ? '#3182ce' : '#38a169';
+
+      const slText = pos.stopLoss ? `SL: ₹${parseFloat(pos.stopLoss).toFixed(2)}` : '—';
+      const tgtText = pos.target ? `TGT: ₹${parseFloat(pos.target).toFixed(2)}` : '—';
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="bold">${pos.symbol}</td>
-        <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${pos.exchange}</span></td>
-        <td style="color: #38a169; font-weight: 600;">BUY</td>
-        <td>${pos.quantity}</td>
-        <td>${pos.buyPrice.toFixed(2)}</td>
-        <td>${exitPrice.toFixed(2)}</td>
-        <td class="${plClass}" style="font-weight: 600;">${plSign}${pl.toFixed(2)}</td>
+        <td class="bold">${pos.symbol}<div style="font-size:9px;color:#a0aec0;margin-top:2px;">${pos.exchange}</div></td>
         <td>
-          <button class="btn btn-withdraw btn-squareoff-pos" data-id="${pos.id}" style="height: 24px; padding: 2px 8px; font-size: 11px; background-color: #fff5f5; border-color: #e53e3e; color: #e53e3e;">
+          <span style="font-size:9px;padding:2px 6px;border-radius:10px;font-weight:700;background:${orderTypeBg};color:${orderTypeColor};">${orderType}</span>
+          ${orderType === 'MIS' ? '<div style="font-size:9px;color:#3182ce;margin-top:2px;">5x Lev.</div>' : ''}
+        </td>
+        <td style="color:${sideColor};font-weight:700;">${side}</td>
+        <td>${pos.quantity}</td>
+        <td>₹${pos.entryPrice.toFixed(2)}</td>
+        <td>₹${exitPrice.toFixed(2)}</td>
+        <td style="font-size:10px;color:#718096;">
+          <div>${slText}</div>
+          <div>${tgtText}</div>
+        </td>
+        <td class="${plClass}" style="font-weight:700;">${plSign}₹${pl.toFixed(2)}</td>
+        <td>
+          <button class="btn btn-withdraw btn-squareoff-pos" data-id="${pos.id}" style="height:24px;padding:2px 8px;font-size:11px;background-color:#fff5f5;border-color:#e53e3e;color:#e53e3e;">
             Squareoff
           </button>
         </td>
       `;
 
-      // Squareoff / Close position event listener
       tr.querySelector('.btn-squareoff-pos').addEventListener('click', () => {
-        closeVirtualPosition(pos.id, exitPrice);
+        closeVirtualPosition(pos.id, exitPrice, 'MANUAL');
       });
       
       tbody.appendChild(tr);
     });
   }
 
-  function closeVirtualPosition(posId, currentLtp) {
+  function closeVirtualPosition(posId, exitPrice, closeReason) {
     if (!activePlatformUser) return;
     const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
     const idx = positions.findIndex(p => p.id === posId && p.status === 'OPEN');
@@ -669,25 +694,39 @@ document.addEventListener('DOMContentLoaded', () => {
     if (idx === -1) return;
     
     const pos = positions[idx];
-    const closeValue = currentLtp * pos.quantity;
-    const pnl = (currentLtp - pos.buyPrice) * pos.quantity;
+    const side = pos.side || 'BUY';
+    const orderType = pos.orderType || 'NRML';
+    
+    // P&L depends on direction
+    let pnl;
+    if (side === 'BUY') {
+      pnl = (exitPrice - pos.entryPrice) * pos.quantity;
+    } else {
+      pnl = (pos.entryPrice - exitPrice) * pos.quantity;
+    }
+
+    // Penalty for auto squareoff
+    const penalty = (closeReason === 'AUTO_SQUAREOFF') ? 59 : 0; // ₹50 + 18% GST
 
     // Close position
     pos.status = 'CLOSED';
-    pos.closePrice = currentLtp;
+    pos.closePrice = exitPrice;
     pos.pnl = pnl;
+    pos.closeReason = closeReason || 'MANUAL';
     
-    // Save positions_db
     localStorage.setItem('positions_db', JSON.stringify(positions));
 
-    // Credit user's wallet with the closing value (returning their initial margin + profit/loss)
-    activePlatformUser.walletBalance = (activePlatformUser.walletBalance || 0) + closeValue;
+    // Return margin + P&L to wallet (margin was what was actually debited at buy)
+    const marginPaid = pos.marginPaid || (pos.entryPrice * pos.quantity); // backward compat
+    const payout = marginPaid + pnl - penalty;
+    activePlatformUser.walletBalance = (activePlatformUser.walletBalance || 0) + payout;
     saveUserData();
     
-    // Log transaction
     logTransaction('TRADE_CLOSE', pnl);
 
-    alert(`Position squared off successfully!\nClosed ${pos.symbol} at ₹${currentLtp.toFixed(2)}.\nPayout of ₹${closeValue.toFixed(2)} credited to your wallet.`);
+    let alertMsg = `Position squared off!\n${pos.symbol} ${side} closed at ₹${exitPrice.toFixed(2)}\nP&L: ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}\nPayout: ₹${payout.toFixed(2)} credited to wallet.`;
+    if (penalty > 0) alertMsg += `\n⚠️ Auto Squareoff Penalty: ₹${penalty} deducted.`;
+    alert(alertMsg);
     
     updateHeaderBalance();
     fetchPositions();
@@ -733,15 +772,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const pl = parseFloat(pos.pnl || 0);
       const plClass = pl >= 0 ? 'green' : 'red';
       const plSign = pl >= 0 ? '+' : '';
+      const side = pos.side || 'BUY';
+      const sideColor = side === 'BUY' ? '#38a169' : '#e53e3e';
+      const orderType = pos.orderType || 'NRML';
+      const closeReasonBadge = pos.closeReason === 'AUTO_SQUAREOFF' ? '⚠️ AUTO' : pos.closeReason === 'SL_HIT' ? '🔴 SL' : pos.closeReason === 'TARGET_HIT' ? '🟢 TGT' : '';
       tr.innerHTML = `
         <td>${pos.createdAt || '--'}</td>
-        <td class="bold">${pos.symbol}</td>
-        <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${pos.exchange}</span></td>
-        <td style="color: #38a169; font-weight: 600;">BUY</td>
+        <td class="bold">${pos.symbol}<div style="font-size:9px;color:#a0aec0;">${pos.exchange}</div></td>
+        <td><span style="font-size:9px;padding:2px 5px;border-radius:10px;font-weight:700;background:${orderType==='MIS'?'#ebf4ff':'#f0fff4'};color:${orderType==='MIS'?'#3182ce':'#38a169'};">${orderType}</span></td>
+        <td style="color:${sideColor};font-weight:700;">${side}</td>
         <td>${pos.quantity}</td>
-        <td>${pos.buyPrice.toFixed(2)}</td>
-        <td>${pos.closePrice ? pos.closePrice.toFixed(2) : '--'}</td>
-        <td class="${plClass}" style="font-weight: 600;">${plSign}${pl.toFixed(2)}</td>
+        <td>₹${(pos.entryPrice || pos.buyPrice || 0).toFixed(2)}</td>
+        <td>₹${pos.closePrice ? pos.closePrice.toFixed(2) : '--'} ${closeReasonBadge}</td>
+        <td class="${plClass}" style="font-weight:700;">${plSign}₹${pl.toFixed(2)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -1411,28 +1454,71 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
-    // Action clicks
-    detailsPanel.querySelector('.btn-buy-action').addEventListener('click', () => {
-      if (!activePlatformUser) {
-        alert("Please log in to place trades!");
-        return;
+    // Helper: show order dialog and return params, or null if cancelled
+    function showOrderDialog(actionLabel, priceLabel, price) {
+      const defaultQty = parseInt(selectedScript.lotsize) || 1;
+      const dialogHtml = `
+📋 ${actionLabel} Order — ${selectedScript.code}
+
+Price (${priceLabel}): ₹${price.toFixed(2)}
+
+Enter details below separated by commas:
+  Quantity, OrderType (MIS/NRML), StopLoss (optional), Target (optional)
+
+Examples:
+  1, MIS               → qty=1, MIS, no SL/Target
+  5, NRML, 82000, 88000  → qty=5, NRML, SL=₹82000, TGT=₹88000
+  2, MIS, 6700          → qty=2, MIS intraday, SL=₹6700 only
+
+Default lot size: ${defaultQty}`;
+
+      const input = prompt(dialogHtml, `${defaultQty}, MIS`);
+      if (input === null) return null;
+
+      const parts = input.split(',').map(s => s.trim());
+      const qty = parseInt(parts[0]);
+      const orderType = (parts[1] || 'MIS').toUpperCase() === 'NRML' ? 'NRML' : 'MIS';
+      const stopLoss = parts[2] ? parseFloat(parts[2]) : null;
+      const target = parts[3] ? parseFloat(parts[3]) : null;
+
+      if (isNaN(qty) || qty <= 0) {
+        alert('Invalid quantity. Please enter a positive number.');
+        return null;
       }
+      return { qty, orderType, stopLoss, target };
+    }
+
+    // Helper: log rejection
+    function logRejection(side, qty, reason) {
+      const rejections = JSON.parse(localStorage.getItem('rejections_db') || '[]');
+      rejections.push({
+        userEmail: activePlatformUser.email,
+        time: new Date().toLocaleString(),
+        symbol: selectedScript.code,
+        side,
+        qty,
+        reason
+      });
+      localStorage.setItem('rejections_db', JSON.stringify(rejections));
+    }
+
+    // Action clicks — BUY button
+    detailsPanel.querySelector('.btn-buy-action').addEventListener('click', () => {
+      if (!activePlatformUser) { alert('Please log in to place trades!'); return; }
 
       const ltp = parseFloat(q.ltp);
       const askPrice = q.depth && q.depth.sell && q.depth.sell.length > 0 ? parseFloat(q.depth.sell[0].price) : ltp;
+      const bidPrice = q.depth && q.depth.buy && q.depth.buy.length > 0 ? parseFloat(q.depth.buy[0].price) : ltp;
 
-      if (isNaN(askPrice) || askPrice <= 0) {
-        alert("Wait for live quotes to load before buying!");
-        return;
-      }
+      if (isNaN(askPrice) || askPrice <= 0) { alert('Wait for live quotes to load before buying!'); return; }
 
-      const defaultQty = parseInt(selectedScript.lotsize) || 50;
-      const qtyStr = prompt(`Enter quantity to BUY (Default Lot Size: ${defaultQty}):`, defaultQty);
-      if (qtyStr === null) return;
-
-      const quantity = parseInt(qtyStr);
-      if (isNaN(quantity) || quantity <= 0) {
-        alert("Please enter a valid positive quantity!");
+      // Check if there's an open SHORT position → close it (Buy to cover)
+      const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
+      const openShort = positions.find(p => p.userEmail === activePlatformUser.email && p.symbol === selectedScript.code && p.status === 'OPEN' && (p.side || 'BUY') === 'SELL');
+      if (openShort) {
+        if (confirm(`You have an open SHORT on ${selectedScript.code}.\nBUY to cover (close short) at Ask ₹${askPrice.toFixed(2)}?`)) {
+          closeVirtualPosition(openShort.id, askPrice, 'MANUAL');
+        }
         return;
       }
 
@@ -1440,56 +1526,32 @@ document.addEventListener('DOMContentLoaded', () => {
       const bypass = localStorage.getItem('bypassMarketHours') === 'true';
       const marketStatus = isMarketOpen(selectedScript.exchange);
       if (!marketStatus.open && !bypass) {
-        const rejections = JSON.parse(localStorage.getItem('rejections_db') || '[]');
-        rejections.push({
-          userEmail: activePlatformUser.email,
-          time: new Date().toLocaleString(),
-          symbol: selectedScript.code,
-          side: 'BUY',
-          qty: quantity,
-          reason: `Market Closed: ${marketStatus.reason}`
-        });
-        localStorage.setItem('rejections_db', JSON.stringify(rejections));
-
-        alert(`Order Rejected: ${marketStatus.reason}\n\n(Tip: You can check "Bypass market hours" in the Account settings profile to test this anytime).`);
+        logRejection('BUY', '?', `Market Closed: ${marketStatus.reason}`);
+        alert(`Order Rejected: ${marketStatus.reason}\n\n(Tip: Enable "Bypass market hours" in Profile settings to test anytime).`);
         return;
       }
 
-      const value = askPrice * quantity;
-      const commission = 0; // Removed 10% fee
-      const totalCost = value;
+      // Show order dialog
+      const params = showOrderDialog('BUY LONG', 'Ask', askPrice);
+      if (!params) return;
+      const { qty, orderType, stopLoss, target } = params;
 
-      if (totalCost > activePlatformUser.walletBalance) {
-        // Log rejection
-        const rejections = JSON.parse(localStorage.getItem('rejections_db') || '[]');
-        rejections.push({
-          userEmail: activePlatformUser.email,
-          time: new Date().toLocaleString(),
-          symbol: selectedScript.code,
-          side: 'BUY',
-          qty: quantity,
-          reason: `Insufficient wallet balance (Required ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })})`
-        });
-        localStorage.setItem('rejections_db', JSON.stringify(rejections));
+      // Calculate margin (MIS = 20% of full value, NRML = 100%)
+      const fullValue = askPrice * qty;
+      const marginRequired = orderType === 'MIS' ? fullValue * 0.20 : fullValue;
 
-        alert(`Insufficient wallet balance!\nRequired balance is ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}, but you only have ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}.`);
+      if (marginRequired > activePlatformUser.walletBalance) {
+        logRejection('BUY', qty, `Insufficient balance (Need ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })})`);
+        alert(`Insufficient wallet balance!\nRequired margin: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nAvailable: ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
         return;
       }
 
-      const confirmMsg = `Confirm BUY Order:\n\n` +
-                         `Symbol: ${selectedScript.code}\n` +
-                         `Quantity: ${quantity}\n` +
-                         `Price (Ask): ₹${askPrice.toFixed(2)}\n` +
-                         `Trade Value: ₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\n\n` +
-                         `Proceed?`;
+      const confirmMsg = `Confirm BUY Order:\n\nSymbol: ${selectedScript.code}\nSide: BUY (LONG)\nOrder Type: ${orderType}${orderType === 'MIS' ? ' (5x Leverage)' : ''}\nQuantity: ${qty}\nEntry Price (Ask): ₹${askPrice.toFixed(2)}\nFull Trade Value: ₹${fullValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nMargin Debited: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${stopLoss ? `\nStop-Loss: ₹${stopLoss.toFixed(2)}` : ''}${target ? `\nTarget: ₹${target.toFixed(2)}` : ''}\n\nProceed?`;
       if (!confirm(confirmMsg)) return;
 
-      // Deduct wallet balance
-      activePlatformUser.walletBalance -= totalCost;
+      activePlatformUser.walletBalance -= marginRequired;
       saveUserData();
 
-      // Add virtual position
-      const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
       const newPos = {
         id: 'POS' + Date.now(),
         userEmail: activePlatformUser.email,
@@ -1497,10 +1559,15 @@ document.addEventListener('DOMContentLoaded', () => {
         name: selectedScript.name,
         exchange: selectedScript.exchange,
         token: selectedScript.token,
-        buyPrice: askPrice,
-        quantity: quantity,
-        tradeValue: value,
-        commissionPaid: commission,
+        side: 'BUY',
+        orderType,
+        entryPrice: askPrice,
+        buyPrice: askPrice, // backward compat
+        quantity: qty,
+        fullTradeValue: fullValue,
+        marginPaid: marginRequired,
+        stopLoss: stopLoss || null,
+        target: target || null,
         status: 'OPEN',
         pnl: 0,
         createdAt: new Date().toLocaleString()
@@ -1508,45 +1575,104 @@ document.addEventListener('DOMContentLoaded', () => {
       positions.push(newPos);
       localStorage.setItem('positions_db', JSON.stringify(positions));
 
-      // Auto-add script to watchlist if not already there (needed for live P&L ticking)
       if (!addedScripts.some(s => s.code === selectedScript.code)) {
         addedScripts.push(selectedScript);
         addedCounter.textContent = addedScripts.length;
         saveWatchlist();
       }
 
-      // Log transaction
-      logTransaction('TRADE_BUY', -totalCost);
-
-      alert(`BUY order placed successfully!\nDebited ₹${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })} from your wallet.`);
+      logTransaction('TRADE_BUY', -marginRequired);
+      alert(`BUY order placed!\n${selectedScript.code} LONG ${qty} units @ ₹${askPrice.toFixed(2)}\nMargin debited: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
       
       updateHeaderBalance();
       fetchPositions();
       renderDetailsPanel();
     });
 
+    // Action clicks — SELL button
     detailsPanel.querySelector('.btn-sell-action').addEventListener('click', () => {
-      if (!activePlatformUser) {
-        alert("Please log in to place trades!");
-        return;
-      }
+      if (!activePlatformUser) { alert('Please log in to place trades!'); return; }
 
+      const ltp = parseFloat(q.ltp);
+      const bidPrice = q.depth && q.depth.buy && q.depth.buy.length > 0 ? parseFloat(q.depth.buy[0].price) : ltp;
+      const askPrice = q.depth && q.depth.sell && q.depth.sell.length > 0 ? parseFloat(q.depth.sell[0].price) : ltp;
+
+      if (isNaN(bidPrice) || bidPrice <= 0) { alert('Wait for live quotes to load before selling!'); return; }
+
+      // Check if there's an open LONG position → close it (Squareoff)
       const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
-      const openPos = positions.find(p => p.userEmail === activePlatformUser.email && p.symbol === selectedScript.code && p.status === 'OPEN');
-
-      if (!openPos) {
-        alert(`You do not have any open positions to sell for ${selectedScript.code}.\nTo place a trade, please BUY first, then close it.`);
+      const openLong = positions.find(p => p.userEmail === activePlatformUser.email && p.symbol === selectedScript.code && p.status === 'OPEN' && (p.side || 'BUY') === 'BUY');
+      if (openLong) {
+        if (confirm(`You have an open LONG on ${selectedScript.code}.\nSELL to squareoff at Bid ₹${bidPrice.toFixed(2)}?`)) {
+          closeVirtualPosition(openLong.id, bidPrice, 'MANUAL');
+        }
         return;
       }
 
-      const bidPrice = q.depth && q.depth.buy && q.depth.buy.length > 0 ? parseFloat(q.depth.buy[0].price) : parseFloat(q.ltp);
-      if (isNaN(bidPrice) || bidPrice <= 0) {
-        alert("Wait for live quotes to load before selling!");
+      // No open long → open a SHORT position
+      const bypass = localStorage.getItem('bypassMarketHours') === 'true';
+      const marketStatus = isMarketOpen(selectedScript.exchange);
+      if (!marketStatus.open && !bypass) {
+        logRejection('SELL SHORT', '?', `Market Closed: ${marketStatus.reason}`);
+        alert(`Order Rejected: ${marketStatus.reason}`);
         return;
       }
 
-      // Square off the open position at Bid price
-      closeVirtualPosition(openPos.id, bidPrice);
+      // Show order dialog
+      const params = showOrderDialog('SELL SHORT', 'Bid', bidPrice);
+      if (!params) return;
+      const { qty, orderType, stopLoss, target } = params;
+
+      const fullValue = bidPrice * qty;
+      const marginRequired = orderType === 'MIS' ? fullValue * 0.20 : fullValue;
+
+      if (marginRequired > activePlatformUser.walletBalance) {
+        logRejection('SELL SHORT', qty, `Insufficient balance (Need ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })})`);
+        alert(`Insufficient wallet balance!\nRequired margin: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nAvailable: ₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+        return;
+      }
+
+      const confirmMsg = `Confirm SELL Order:\n\nSymbol: ${selectedScript.code}\nSide: SELL (SHORT)\nOrder Type: ${orderType}${orderType === 'MIS' ? ' (5x Leverage)' : ''}\nQuantity: ${qty}\nEntry Price (Bid): ₹${bidPrice.toFixed(2)}\nFull Trade Value: ₹${fullValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}\nMargin Debited: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${stopLoss ? `\nStop-Loss: ₹${stopLoss.toFixed(2)}` : ''}${target ? `\nTarget: ₹${target.toFixed(2)}` : ''}\n\nProceed?`;
+      if (!confirm(confirmMsg)) return;
+
+      activePlatformUser.walletBalance -= marginRequired;
+      saveUserData();
+
+      const newPos = {
+        id: 'POS' + Date.now(),
+        userEmail: activePlatformUser.email,
+        symbol: selectedScript.code,
+        name: selectedScript.name,
+        exchange: selectedScript.exchange,
+        token: selectedScript.token,
+        side: 'SELL',
+        orderType,
+        entryPrice: bidPrice,
+        buyPrice: bidPrice, // backward compat
+        quantity: qty,
+        fullTradeValue: fullValue,
+        marginPaid: marginRequired,
+        stopLoss: stopLoss || null,
+        target: target || null,
+        status: 'OPEN',
+        pnl: 0,
+        createdAt: new Date().toLocaleString()
+      };
+      positions.push(newPos);
+      localStorage.setItem('positions_db', JSON.stringify(positions));
+
+      if (!addedScripts.some(s => s.code === selectedScript.code)) {
+        addedScripts.push(selectedScript);
+        addedCounter.textContent = addedScripts.length;
+        saveWatchlist();
+      }
+
+      logTransaction('TRADE_SELL_SHORT', -marginRequired);
+      alert(`SELL SHORT order placed!\n${selectedScript.code} SHORT ${qty} units @ ₹${bidPrice.toFixed(2)}\nMargin debited: ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+      
+      updateHeaderBalance();
+      fetchPositions();
+      renderDetailsPanel();
     });
   }
 
@@ -1614,6 +1740,98 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Check Stop-Loss and Target triggers for all open positions (called every tick)
+  function checkSlTargetTriggers() {
+    if (!activePlatformUser) return;
+    const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
+    const openPositions = positions.filter(p => p.userEmail === activePlatformUser.email && p.status === 'OPEN');
+
+    openPositions.forEach(pos => {
+      if (!pos.stopLoss && !pos.target) return;
+
+      const matchingScript = addedScripts.find(s => s.token === pos.token);
+      const liveQuote = (matchingScript && matchingScript.quote) ? matchingScript.quote
+                      : positionQuoteCache[pos.token] || null;
+      if (!liveQuote) return;
+
+      const side = pos.side || 'BUY';
+      const bid = liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0
+        ? parseFloat(liveQuote.depth.buy[0].price) : parseFloat(liveQuote.ltp);
+      const ask = liveQuote.depth && liveQuote.depth.sell && liveQuote.depth.sell.length > 0
+        ? parseFloat(liveQuote.depth.sell[0].price) : parseFloat(liveQuote.ltp);
+
+      if (side === 'BUY') {
+        if (pos.stopLoss && bid <= parseFloat(pos.stopLoss)) {
+          alert(`🔴 Stop-Loss Triggered!\n${pos.symbol} BUY position closed at ₹${bid.toFixed(2)}\nSL was set at ₹${parseFloat(pos.stopLoss).toFixed(2)}`);
+          closeVirtualPosition(pos.id, bid, 'SL_HIT');
+          return;
+        }
+        if (pos.target && bid >= parseFloat(pos.target)) {
+          alert(`🟢 Target Hit!\n${pos.symbol} BUY position closed at ₹${bid.toFixed(2)}\nTarget was ₹${parseFloat(pos.target).toFixed(2)}`);
+          closeVirtualPosition(pos.id, bid, 'TARGET_HIT');
+        }
+      } else {
+        if (pos.stopLoss && ask >= parseFloat(pos.stopLoss)) {
+          alert(`🔴 Stop-Loss Triggered!\n${pos.symbol} SHORT position closed at ₹${ask.toFixed(2)}\nSL was set at ₹${parseFloat(pos.stopLoss).toFixed(2)}`);
+          closeVirtualPosition(pos.id, ask, 'SL_HIT');
+          return;
+        }
+        if (pos.target && ask <= parseFloat(pos.target)) {
+          alert(`🟢 Target Hit!\n${pos.symbol} SHORT position closed at ₹${ask.toFixed(2)}\nTarget was ₹${parseFloat(pos.target).toFixed(2)}`);
+          closeVirtualPosition(pos.id, ask, 'TARGET_HIT');
+        }
+      }
+    });
+  }
+
+  // Auto squareoff MIS positions past their exchange cutoff (runs every 30s)
+  function startAutoSquareOff() {
+    setInterval(() => {
+      if (!activePlatformUser) return;
+      const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
+      const openMIS = positions.filter(p =>
+        p.userEmail === activePlatformUser.email &&
+        p.status === 'OPEN' &&
+        (p.orderType || 'NRML') === 'MIS'
+      );
+      if (openMIS.length === 0) return;
+
+      const now = new Date();
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const ist = new Date(now.getTime() + istOffset);
+      const h = ist.getUTCHours();
+      const m = ist.getUTCMinutes();
+      const totalMin = h * 60 + m;
+      const day = ist.getUTCDay(); // 0=Sun, 6=Sat
+
+      if (day === 0 || day === 6) return; // No squareoff on weekends
+
+      openMIS.forEach(pos => {
+        let cutoff = null;
+        const exch = (pos.exchange || '').toUpperCase();
+        if (exch === 'MCX') cutoff = 23 * 60 + 15;       // 11:15 PM
+        else if (exch === 'CDS') cutoff = 16 * 60 + 45;  // 4:45 PM
+        else cutoff = 15 * 60 + 15;                        // 3:15 PM (NSE/NFO/BSE)
+
+        if (totalMin >= cutoff) {
+          const matchingScript = addedScripts.find(s => s.token === pos.token);
+          const liveQuote = (matchingScript && matchingScript.quote) ? matchingScript.quote
+                          : positionQuoteCache[pos.token] || null;
+          const ltp = liveQuote ? parseFloat(liveQuote.ltp) : (pos.entryPrice || pos.buyPrice);
+          const side = pos.side || 'BUY';
+          let exitPrice = ltp;
+          if (liveQuote) {
+            if (side === 'BUY' && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0)
+              exitPrice = parseFloat(liveQuote.depth.buy[0].price);
+            else if (side === 'SELL' && liveQuote.depth && liveQuote.depth.sell && liveQuote.depth.sell.length > 0)
+              exitPrice = parseFloat(liveQuote.depth.sell[0].price);
+          }
+          closeVirtualPosition(pos.id, exitPrice, 'AUTO_SQUAREOFF');
+        }
+      });
+    }, 30000); // Check every 30 seconds
+  }
+
   // Automatic live ticker loop (every 500ms)
   function startLiveTicker() {
     setInterval(async () => {
@@ -1660,10 +1878,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (script) {
               script.quote = qData;
             } else {
-              // Store quote for open positions whose script isn't in watchlist
               positionQuoteCache[qData.symbolToken] = qData;
             }
           });
+
+          // Check SL / Target triggers for all open positions
+          checkSlTargetTriggers();
           
           renderWatchlistTable();
           fetchPositions();
@@ -1695,10 +1915,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const matchingScript = addedScripts.find(s => s.token === pos.token);
       const liveQuote = (matchingScript && matchingScript.quote) ? matchingScript.quote
                       : positionQuoteCache[pos.token] || null;
-      const ltp = liveQuote ? parseFloat(liveQuote.ltp) : pos.buyPrice;
-      const bidPrice = liveQuote && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0
-                       ? parseFloat(liveQuote.depth.buy[0].price) : ltp;
-      livePnl += (bidPrice - pos.buyPrice) * pos.quantity;
+      const ltp = liveQuote ? parseFloat(liveQuote.ltp) : (pos.entryPrice || pos.buyPrice);
+      const side = pos.side || 'BUY';
+
+      if (side === 'BUY') {
+        const bid = liveQuote && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0
+          ? parseFloat(liveQuote.depth.buy[0].price) : ltp;
+        livePnl += (bid - pos.entryPrice) * pos.quantity;
+      } else {
+        const ask = liveQuote && liveQuote.depth && liveQuote.depth.sell && liveQuote.depth.sell.length > 0
+          ? parseFloat(liveQuote.depth.sell[0].price) : ltp;
+        livePnl += (pos.entryPrice - ask) * pos.quantity;
+      }
     });
 
     const closedPositions = userPositions.filter(p => p.status === 'CLOSED');
@@ -1719,6 +1947,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   startLiveTicker();
+  startAutoSquareOff();
 
   // Filter watchlist list on search typing
   watchlistSearchInput.addEventListener('input', renderWatchlistTable);
