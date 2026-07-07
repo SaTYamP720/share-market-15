@@ -314,6 +314,38 @@ app.get('/api/market-data', requireAuth, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+function getRealisticBasePrice(symbol, token) {
+  const sym = (symbol || '').toUpperCase();
+  
+  if (sym.startsWith('GOLDM')) return 7200; // Gold Mini
+  if (sym.startsWith('GOLD')) return 72000;
+  if (sym.startsWith('SILVERM')) return 8500; // Silver Mini
+  if (sym.startsWith('SILVER')) return 85000;
+  if (sym.startsWith('CRUDEOIL')) return 6500;
+  if (sym.startsWith('NATURALGAS')) return 180;
+  if (sym.startsWith('ZINCMINI')) return 260;
+  if (sym.startsWith('ZINC')) return 260;
+  if (sym.startsWith('COPPER')) return 750;
+  if (sym.startsWith('ALUMINIUM')) return 230;
+  if (sym.startsWith('LEAD')) return 190;
+  if (sym.startsWith('MENTHAOIL')) return 920;
+  
+  // NSE Stocks
+  if (sym.startsWith('RELIANCE')) return 2450;
+  if (sym.startsWith('TATASTEEL')) return 160;
+  if (sym.startsWith('INFY')) return 1550;
+  if (sym.startsWith('TCS')) return 3850;
+  if (sym.startsWith('HDFCBANK')) return 1650;
+  if (sym.startsWith('ICICIBANK')) return 1150;
+  if (sym.startsWith('SBIN')) return 840;
+  if (sym.startsWith('BHARTIARTL')) return 1420;
+  
+  // Default fallback based on token seed
+  const seed = parseInt(token) || 5000;
+  return (seed % 900) + 100;
+}
+
 // 4c. Get Batch Quotes / Market Data for a list of tokens
 app.post('/api/market-data-batch', requireAuth, async (req, res) => {
   const { scripts } = req.body;
@@ -325,11 +357,10 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
   // Local test mode bypass
   if (activeSession.clientCode === 'GUEST' || !activeSession.smartConnectInstance.generateSession) {
     const results = scripts.map(s => {
-      const seed = parseInt(s.token) || 5000;
-      // Add a small random price fluctuation to simulate real-time ticking
-      const randomTick = (Math.random() * 4 - 2); 
-      const ltp = (seed % 900) + 100 + randomTick;
-      const prevClose = (seed % 900) + 100;
+      const basePrice = getRealisticBasePrice(s.symbol, s.token);
+      const randomTick = (Math.random() * (basePrice * 0.008) - (basePrice * 0.004)); 
+      const ltp = basePrice + randomTick;
+      const prevClose = basePrice;
       const change = ltp - prevClose;
       const pctChange = (change / prevClose) * 100;
       
@@ -342,8 +373,8 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
         low: (Math.min(ltp, prevClose) * 0.99).toFixed(2),
         close: prevClose.toFixed(2),
         depth: {
-          buy: [{ price: (ltp - 0.2).toFixed(2), quantity: 150 }],
-          sell: [{ price: (ltp + 0.2).toFixed(2), quantity: 200 }]
+          buy: [{ price: (ltp - (basePrice * 0.001)).toFixed(2), quantity: 150 }],
+          sell: [{ price: (ltp + (basePrice * 0.001)).toFixed(2), quantity: 200 }]
         },
         netChange: change.toFixed(2),
         percentChange: pctChange.toFixed(2)
@@ -366,15 +397,18 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
     });
 
     if (response.status && response.data && response.data.fetched) {
-      const results = response.data.fetched.map(info => {
+      const results = scripts.map(s => {
+        const key = `${s.exchange}:${s.token}`;
+        const info = response.data.fetched.find(item => item.symbolToken === s.token && item.exchange === s.exchange) || {};
+        
         const ltp = parseFloat(info.ltp || 0);
-        const close = parseFloat(info.close || info.prevClose || 0);
+        const close = parseFloat(info.close || 0);
         const change = ltp - close;
         const pctChange = close > 0 ? (change / close) * 100 : 0;
 
         return {
-          exchange: info.exchange || '',
-          symbolToken: info.symbolToken || '',
+          exchange: s.exchange,
+          symbolToken: s.token,
           ltp: ltp.toFixed(2),
           open: parseFloat(info.open || 0).toFixed(2),
           high: parseFloat(info.high || 0).toFixed(2),
@@ -392,10 +426,10 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
     } else {
       console.warn(`[Backend] SmartAPI returned error status: ${response.status} (${response.message}). Falling back to simulated quotes.`);
       const mockResults = scripts.map(s => {
-        const seed = parseInt(s.token) || 5000;
-        const randomTick = (Math.random() * 4 - 2); 
-        const ltp = (seed % 900) + 100 + randomTick;
-        const prevClose = (seed % 900) + 100;
+        const basePrice = getRealisticBasePrice(s.symbol, s.token);
+        const randomTick = (Math.random() * (basePrice * 0.008) - (basePrice * 0.004)); 
+        const ltp = basePrice + randomTick;
+        const prevClose = basePrice;
         const change = ltp - prevClose;
         const pctChange = (change / prevClose) * 100;
         
@@ -408,8 +442,8 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
           low: (Math.min(ltp, prevClose) * 0.99).toFixed(2),
           close: prevClose.toFixed(2),
           depth: {
-            buy: [{ price: (ltp - 0.2).toFixed(2), quantity: 150 }],
-            sell: [{ price: (ltp + 0.2).toFixed(2), quantity: 200 }]
+            buy: [{ price: (ltp - (basePrice * 0.001)).toFixed(2), quantity: 150 }],
+            sell: [{ price: (ltp + (basePrice * 0.001)).toFixed(2), quantity: 200 }]
           },
           netChange: change.toFixed(2),
           percentChange: pctChange.toFixed(2)
@@ -420,10 +454,10 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
   } catch (error) {
     console.error("[Backend] batch marketData exception, falling back to simulation:", error.message);
     const mockResults = scripts.map(s => {
-      const seed = parseInt(s.token) || 5000;
-      const randomTick = (Math.random() * 4 - 2); 
-      const ltp = (seed % 900) + 100 + randomTick;
-      const prevClose = (seed % 900) + 100;
+      const basePrice = getRealisticBasePrice(s.symbol, s.token);
+      const randomTick = (Math.random() * (basePrice * 0.008) - (basePrice * 0.004)); 
+      const ltp = basePrice + randomTick;
+      const prevClose = basePrice;
       const change = ltp - prevClose;
       const pctChange = (change / prevClose) * 100;
       
@@ -436,8 +470,8 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
         low: (Math.min(ltp, prevClose) * 0.99).toFixed(2),
         close: prevClose.toFixed(2),
         depth: {
-          buy: [{ price: (ltp - 0.2).toFixed(2), quantity: 150 }],
-          sell: [{ price: (ltp + 0.2).toFixed(2), quantity: 200 }]
+          buy: [{ price: (ltp - (basePrice * 0.001)).toFixed(2), quantity: 150 }],
+          sell: [{ price: (ltp + (basePrice * 0.001)).toFixed(2), quantity: 200 }]
         },
         netChange: change.toFixed(2),
         percentChange: pctChange.toFixed(2)
