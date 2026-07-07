@@ -47,6 +47,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4000);
   }
 
+  // Custom Confirmation Dialog helper
+  function showConfirm(message, okText = 'Confirm', okColor = '#e53e3e') {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('confirm-modal');
+      const msgEl = document.getElementById('confirm-modal-message');
+      const okBtn = document.getElementById('confirm-ok-btn');
+      const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+      msgEl.innerHTML = message.replace(/\n/g, '<br>');
+      okBtn.textContent = okText;
+      okBtn.style.background = okColor;
+
+      modal.style.display = 'flex';
+
+      okBtn.onclick = () => {
+        modal.style.display = 'none';
+        resolve(true);
+      };
+
+      cancelBtn.onclick = () => {
+        modal.style.display = 'none';
+        resolve(false);
+      };
+    });
+  }
+
   // Mock Database for scripts (categorized)
   const scriptsDb = {
     futures: [
@@ -1634,7 +1660,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
       const openShort = positions.find(p => p.userEmail === activePlatformUser.email && p.symbol === selectedScript.code && p.status === 'OPEN' && (p.side || 'BUY') === 'SELL');
       if (openShort) {
-        if (confirm(`You have an open SHORT on ${selectedScript.code}.\nBUY to cover (close short) at Ask ₹${askPrice.toFixed(2)}?`)) {
+        const proceed = await showConfirm(`You have an open SHORT on ${selectedScript.code}.\nBUY to cover (close short) at Ask ₹${askPrice.toFixed(2)}?`, 'Cover Short', '#38a169');
+        if (proceed) {
           closeVirtualPosition(openShort.id, askPrice, 'MANUAL');
         }
         return;
@@ -1718,7 +1745,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
       const openLong = positions.find(p => p.userEmail === activePlatformUser.email && p.symbol === selectedScript.code && p.status === 'OPEN' && (p.side || 'BUY') === 'BUY');
       if (openLong) {
-        if (confirm(`You have an open LONG on ${selectedScript.code}.\nSELL to squareoff at Bid ₹${bidPrice.toFixed(2)}?`)) {
+        const proceed = await showConfirm(`You have an open LONG on ${selectedScript.code}.\nSELL to squareoff at Bid ₹${bidPrice.toFixed(2)}?`, 'Squareoff Long', '#e53e3e');
+        if (proceed) {
           closeVirtualPosition(openLong.id, bidPrice, 'MANUAL');
         }
         return;
