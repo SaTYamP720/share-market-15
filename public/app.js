@@ -776,6 +776,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="background: white; border-radius: 12px; width: 340px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 16px; border: 1px solid #e2e8f0; animation: modalFadeIn 0.2s ease;">
           <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #1a202c;">Modify SL & Target</h3>
           <p style="margin: 0; font-size: 12px; color: #718096; font-weight: 600; text-transform: uppercase;">${pos.symbol} (${pos.side || 'BUY'} • Qty: ${pos.quantity})</p>
+          <div style="font-size: 11px; color: #e53e3e; font-weight: 600; background: #fff5f5; border: 1px solid #fed7d7; padding: 6px 10px; border-radius: 6px; line-height: 1.3;">
+            ⚠️ Note: You can set either Stop-Loss OR Target, not both together.
+          </div>
           
           <div style="display: flex; flex-direction: column; gap: 12px;">
              <div style="display: flex; flex-direction: column; gap: 6px;">
