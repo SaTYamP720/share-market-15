@@ -501,7 +501,13 @@ app.get('/api/search-scripts', (req, res) => {
     } else if (cat === 'options') {
       return item.exch_seg === 'NFO' && (item.symbol.endsWith('CE') || item.symbol.endsWith('PE'));
     } else if (cat === 'mcx') {
-      return item.exch_seg === 'MCX';
+      if (item.exch_seg !== 'MCX') return false;
+      const symbolUpper = item.symbol.toUpperCase();
+      const allowed = ['GOLD', 'CRUDEOIL', 'COPPER', 'LEAD', 'ZINC', 'NATURALGAS', 'SILVER'];
+      const isAllowedBase = allowed.some(a => symbolUpper.startsWith(a));
+      const isFutures = symbolUpper.endsWith('FUT') || symbolUpper.includes('FUT');
+      const isNotMini = !symbolUpper.startsWith('GOLDM') && !symbolUpper.startsWith('SILVERM') && !symbolUpper.startsWith('COPPERM');
+      return isAllowedBase && isFutures && isNotMini;
     } else if (cat === 'forex') {
       return item.exch_seg === 'CDS';
     } else if (cat === 'us-stocks' || cat === 'us-index' || cat === 'comex') {
@@ -528,11 +534,39 @@ app.get('/api/search-scripts', (req, res) => {
   const categoriesList = ['equity', 'futures', 'options', 'mcx', 'forex'];
   const counts = {};
   categoriesList.forEach(cat => {
-    counts[cat] = allMatches.filter(item => filterFn(item, cat)).length;
+    if (cat === 'mcx') {
+      const allMcx = allMatches.filter(item => filterFn(item, 'mcx'));
+      const seen = new Set();
+      const allowedBase = ['GOLD', 'CRUDEOIL', 'COPPER', 'LEAD', 'ZINC', 'NATURALGAS', 'SILVER'];
+      allMcx.forEach(item => {
+        const symbolUpper = item.symbol.toUpperCase();
+        const matchedBase = allowedBase.find(base => symbolUpper.startsWith(base));
+        if (matchedBase) seen.add(matchedBase);
+      });
+      counts[cat] = seen.size;
+    } else {
+      counts[cat] = allMatches.filter(item => filterFn(item, cat)).length;
+    }
   });
 
   // Filter actual results to send for the currently active tab
-  const categoryResults = allMatches.filter(item => filterFn(item, activeCategory));
+  let categoryResults = allMatches.filter(item => filterFn(item, activeCategory));
+
+  if (activeCategory === 'mcx') {
+    const seen = new Set();
+    const uniqueList = [];
+    const allowedBase = ['GOLD', 'CRUDEOIL', 'COPPER', 'LEAD', 'ZINC', 'NATURALGAS', 'SILVER'];
+    
+    categoryResults.forEach(item => {
+      const symbolUpper = item.symbol.toUpperCase();
+      const matchedBase = allowedBase.find(base => symbolUpper.startsWith(base));
+      if (matchedBase && !seen.has(matchedBase)) {
+        seen.add(matchedBase);
+        uniqueList.push(item);
+      }
+    });
+    categoryResults = uniqueList;
+  }
 
   res.json({
     success: true,
