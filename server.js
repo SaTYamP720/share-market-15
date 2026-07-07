@@ -563,8 +563,9 @@ app.get('/api/search-scripts', (req, res) => {
     } else if (cat === 'us-stocks' || cat === 'us-index' || cat === 'comex') {
       return false; // Not supported by Angel One API
     } else {
-      // Equities
+      // Equities (only keep tradeable shares, ignore indices which have non-empty instrumenttype like 'AMXIDX')
       return (item.exch_seg === 'NSE' || item.exch_seg === 'BSE') && 
+             item.instrumenttype === '' &&
              !item.symbol.endsWith('FUT') && 
              !item.symbol.endsWith('CE') && 
              !item.symbol.endsWith('PE');
