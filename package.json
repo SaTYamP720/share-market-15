@@ -9,6 +9,7 @@
   "dependencies": {
     "express": "^4.19.2",
     "otplib": "^13.4.1",
-    "smartapi-javascript": "^1.0.27"
+    "smartapi-javascript": "^1.0.27",
+    "socket.io": "^4.8.3"
   }
 }

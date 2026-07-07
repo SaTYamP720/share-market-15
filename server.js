@@ -1,10 +1,20 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const path = require('path');
 const { SmartAPI } = require('smartapi-javascript');
 const { generateSync } = require('otplib');
 
 const app = express();
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: '*' }
+});
 const PORT = process.env.PORT || 3000;
+
+// Track which tokens each connected socket is watching
+// Map<socketId, Set<tokenKey>> where tokenKey = "EXCHANGE:TOKEN"
+const socketSubscriptions = new Map();
 
 app.use(express.json());
 // Serve static files from the 'public' directory
@@ -597,7 +607,20 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
+// =============================================
+// STEP 1: Basic socket.io connection tracking
+// =============================================
+io.on('connection', (socket) => {
+  console.log(`[WS] Client connected: ${socket.id} | Total: ${io.engine.clientsCount}`);
+  socketSubscriptions.set(socket.id, new Set());
+
+  socket.on('disconnect', () => {
+    console.log(`[WS] Client disconnected: ${socket.id} | Total: ${io.engine.clientsCount}`);
+    socketSubscriptions.delete(socket.id);
+  });
+});
+
+httpServer.listen(PORT, () => {
   console.log(`==================================================`);
   console.log(`🚀 Share Market 18 terminal is running locally!`);
   console.log(`👉 Access URL: http://localhost:${PORT}`);

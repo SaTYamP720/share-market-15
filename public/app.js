@@ -1,3 +1,16 @@
+// =============================================
+// STEP 1: Connect browser to server via WebSocket
+// =============================================
+const socket = io();
+
+socket.on('connect', () => {
+  console.log('[WS] Connected to server. Socket ID:', socket.id);
+});
+
+socket.on('disconnect', () => {
+  console.log('[WS] Disconnected from server.');
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   // Navigation & Tab elements
   const navItems = document.querySelectorAll('.nav-item');
