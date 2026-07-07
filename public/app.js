@@ -452,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
       }
       
-      alert("Logged out successfully from your platform account.");
+      showToast("Logged out successfully from your platform account.", "info");
       renderAuthView();
     });
 
@@ -467,13 +467,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const password = document.getElementById('register-password').value.trim();
 
     if (!name || !email || !password) {
-      alert("All fields are required for sign up!");
+      showToast("All fields are required for sign up!", "warning");
       return;
     }
 
     const users = JSON.parse(localStorage.getItem('users_db') || '[]');
     if (users.some(u => u.email === email)) {
-      alert("This email is already registered!");
+      showToast("This email is already registered!", "error");
       return;
     }
 
@@ -482,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
     users.push(newUser);
     localStorage.setItem('users_db', JSON.stringify(users));
 
-    alert("Registration successful! You can now log in.");
+    showToast("Registration successful! You can now log in.", "success");
     document.getElementById('register-name').value = '';
     document.getElementById('register-email').value = '';
     document.getElementById('register-password').value = '';
@@ -493,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const password = document.getElementById('login-password').value.trim();
 
     if (!email || !password) {
-      alert("Please enter both email and password!");
+      showToast("Please enter both email and password!", "warning");
       return;
     }
 
@@ -501,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const user = users.find(u => u.email === email && u.password === password);
 
     if (!user) {
-      alert("Invalid email or password!");
+      showToast("Invalid email or password!", "error");
       return;
     }
 
@@ -510,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     addedScripts = JSON.parse(localStorage.getItem('watchlist_' + activePlatformUser.email) || '[]');
 
-    alert(`Welcome back, ${user.name}!`);
+    showToast(`Welcome back, ${user.name}!`, "success");
     updateHeaderBalance();
     
     // Switch view to Positions view
@@ -1071,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Watchlist Action Buttons for Overlay opening
   const openOverlay = () => {
     if (!apiConnected) {
-      alert("Please connect your Angel One API in the Settings tab first to search and add scripts!");
+      showToast("Please connect your Angel One API in the Settings tab first to search and add scripts!", "warning");
       return;
     }
     renderOverlayScripts();
@@ -2073,7 +2073,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelector('.btn-deposit').addEventListener('click', () => {
     if (!activePlatformUser) {
-      alert('Please log in first to deposit funds!');
+      showToast('Please log in first to deposit funds!', 'warning');
       return;
     }
     depositModal.style.display = 'flex';
@@ -2088,7 +2088,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('deposit-amount-input');
     const amount = parseFloat(input.value);
     if (isNaN(amount) || amount <= 0) {
-      alert('Please enter a valid positive amount!');
+      showToast('Please enter a valid positive amount!', 'warning');
       return;
     }
 
@@ -2099,12 +2099,12 @@ document.addEventListener('DOMContentLoaded', () => {
     depositModal.style.display = 'none';
     input.value = '';
     updateHeaderBalance();
-    alert(`Successfully deposited ₹${amount.toLocaleString('en-IN')} to your wallet!`);
+    showToast(`Successfully deposited ₹${amount.toLocaleString('en-IN')} to your wallet!`, 'success');
   });
 
   document.querySelector('.btn-withdraw').addEventListener('click', () => {
     if (!activePlatformUser) {
-      alert('Please log in first to withdraw funds!');
+      showToast('Please log in first to withdraw funds!', 'warning');
       return;
     }
     withdrawModal.style.display = 'flex';
@@ -2119,12 +2119,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('withdraw-amount-input');
     const amount = parseFloat(input.value);
     if (isNaN(amount) || amount <= 0) {
-      alert('Please enter a valid positive amount!');
+      showToast('Please enter a valid positive amount!', 'warning');
       return;
     }
 
     if (amount > activePlatformUser.walletBalance) {
-      alert('Insufficient wallet balance!');
+      showToast('Insufficient wallet balance!', 'error');
       return;
     }
 
@@ -2135,11 +2135,11 @@ document.addEventListener('DOMContentLoaded', () => {
     withdrawModal.style.display = 'none';
     input.value = '';
     updateHeaderBalance();
-    alert(`Successfully withdrew ₹${amount.toLocaleString('en-IN')} from your wallet!`);
+    showToast(`Successfully withdrew ₹${amount.toLocaleString('en-IN')} from your wallet!`, 'success');
   });
 
   document.querySelector('.btn-live-tv').addEventListener('click', () => {
-    alert('Live TV feed will open a streaming drawer for market channels.');
+    showToast('Live TV feed will open a streaming drawer for market channels.', 'info');
   });
 
   document.getElementById('refresh-btn').addEventListener('click', () => {
@@ -2153,9 +2153,9 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (apiConnected) {
         fetchPositions();
-        alert('Terminal data refreshed from Angel One API.');
+        showToast('Terminal data refreshed from Angel One API.', 'success');
       } else {
-        alert('Terminal views refreshed (Mock mode).');
+        showToast('Terminal views refreshed (Mock mode).', 'info');
       }
     }, 500);
   });
