@@ -1509,6 +1509,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const changeColor = q.netChange === '--' ? '#718096' : (isPositive ? '#38a169' : '#e53e3e');
       const changeSign = q.netChange === '--' || parseFloat(q.netChange) < 0 ? '' : '+';
 
+      // Get LTP from WebSocket cache first (most real-time), fall back to REST quote
+      const wsLtp = getLtpFromWS(script.exchange, script.token);
+      const displayLtp = wsLtp !== null ? wsLtp : (q.ltp !== '--' ? parseFloat(q.ltp) : null);
+      const formattedLtp = displayLtp !== null
+        ? displayLtp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '--';
+
+      // Safe depth access
+      const bidPrice = q.depth && q.depth.buy && q.depth.buy[0] ? q.depth.buy[0].price : '--';
+      const askPrice = q.depth && q.depth.sell && q.depth.sell[0] ? q.depth.sell[0].price : '--';
+
       const tr = document.createElement('tr');
       tr.style.cursor = 'pointer';
       
@@ -1523,17 +1534,17 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="font-size: 10px; color: #a0aec0; font-weight: normal; margin-top: 2px;">${script.name}</div>
         </td>
         <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${script.exchange}</span></td>
-        <td style="color: #38a169; font-weight: 500;">${q.depth.buy[0].price}</td>
-        <td style="color: #e53e3e; font-weight: 500;">${q.depth.sell[0].price}</td>
+        <td style="color: #38a169; font-weight: 500;">${bidPrice}</td>
+        <td style="color: #e53e3e; font-weight: 500;">${askPrice}</td>
         <td style="color: ${changeColor}; font-size: 11px; font-weight: 500;">
           <div>${changeSign}${q.netChange}</div>
           <div style="font-size: 9px; margin-top: 2px;">${changeSign}${q.percentChange}%</div>
         </td>
-        <td>${q.high}</td>
-        <td>${q.low}</td>
-        <td>${q.open}</td>
-        <td>${q.close}</td>
-        <td class="bold" style="color: ${changeColor};">${q.ltp}</td>
+        <td>${q.high || '--'}</td>
+        <td>${q.low || '--'}</td>
+        <td>${q.open || '--'}</td>
+        <td>${q.close || '--'}</td>
+        <td class="bold" style="color: ${changeColor};">${formattedLtp}</td>
         <td style="text-align: center; vertical-align: middle; padding: 0 10px;">
           <button class="btn-delete-watchlist" data-code="${script.code}" style="background: none; border: none; padding: 4px; cursor: pointer; color: #a0aec0; transition: color 0.2s; display: flex; align-items: center; justify-content: center;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
@@ -1545,6 +1556,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </button>
         </td>
       `;
+
 
       // Select active script row on click (unless delete is clicked)
       tr.addEventListener('click', (e) => {
@@ -1578,11 +1590,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Fetch live market quotes from Express proxy server
   async function fetchQuoteForScript(script) {
-    if (script.quote) return;
+    // Only skip if we have a FULL quote (one with open/high/low, not just a WS LTP stub)
+    if (script.quote && script.quote.open !== undefined) return;
     try {
       const response = await fetch(`/api/market-data?exchange=${script.exchange}&token=${script.token}`);
       const result = await response.json();
       if (result.success && result.data) {
+        // Merge WS live LTP into the REST quote so it doesn't overwrite real-time price
+        const wsLtp = getLtpFromWS(script.exchange, script.token);
+        result.data.ltp = wsLtp !== null ? wsLtp : result.data.ltp;
         script.quote = result.data;
         renderWatchlistTable();
         if (selectedScript && selectedScript.code === script.code) {
@@ -2305,26 +2321,35 @@ document.addEventListener('DOMContentLoaded', () => {
   function startLiveTicker() {
 
     // Helper: get LTP for a script from wsLivePrices cache
+    // Supports both short names (NSE, MCX) and exch_seg names (nse_cm, mcx_fo)
     function getLtpFromWS(exchange, token) {
-      const exchMap = { 'NSE': 1, 'NFO': 2, 'BSE': 3, 'BFO': 4, 'MCX': 5, 'NCDEX': 7, 'CDS': 13 };
-      const exchType = exchMap[(exchange || '').toUpperCase()] || 1;
+      const clean = (exchange || '').toLowerCase();
+      let exchType = 1;
+      if (clean === 'nse_cm' || clean === 'nse') exchType = 1;
+      else if (clean === 'nse_fo' || clean === 'nfo') exchType = 2;
+      else if (clean === 'bse_cm' || clean === 'bse') exchType = 3;
+      else if (clean === 'bse_fo' || clean === 'bfo') exchType = 4;
+      else if (clean === 'mcx_fo' || clean === 'mcx') exchType = 5;
+      else if (clean === 'ncx_fo' || clean === 'ncdex') exchType = 7;
+      else if (clean === 'cde_fo' || clean === 'cds') exchType = 13;
       const key = `${exchType}:${token}`;
       return wsLivePrices[key] !== undefined ? parseFloat(wsLivePrices[key]) : null;
     }
 
-    // UI refresh loop — runs every 500ms but reads from LOCAL cache, no HTTP
+    // UI refresh loop — runs every 500ms but reads from LOCAL wsLivePrices cache, no HTTP
     setInterval(() => {
       if (!apiConnected) return;
       updateMarketStatusBadge();
 
-      // Update script.quote.ltp for every watchlist script from WS prices
+      // Update LTP for every watchlist script using WS prices (only if full quote already loaded)
       addedScripts.forEach(script => {
         const ltp = getLtpFromWS(script.exchange, script.token);
         if (ltp !== null) {
-          if (!script.quote) script.quote = {};
-          script.quote.ltp = ltp;
-          script.quote.symbolToken = script.token;
-          script.quote.exchange = script.exchange;
+          if (script.quote && script.quote.open !== undefined) {
+            // Full REST quote exists — safely update just the LTP
+            script.quote.ltp = ltp;
+          }
+          // If no full quote yet, fetchQuoteForScript will be called by renderWatchlistTable
         }
       });
 
