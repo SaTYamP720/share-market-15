@@ -24,6 +24,11 @@ function mergeWsQuote(key, quote) {
 }
 
 
+function formatPricePlain(value) {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : '--';
+}
+
 function createQuoteFromWs(liveQuote) {
   const quote = {
     ltp: liveQuote?.ltp ?? '--',
@@ -77,7 +82,7 @@ socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange
   // Store the full live tick locally so bid/ask do not stay stuck at the first REST quote.
   const liveQuote = mergeWsQuote(key, { ltp, bid, ask, open, high, low, close, netChange, pctChange });
 
-  const fmt = (v) => v != null ? parseFloat(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
+  const fmt = (v) => v != null ? formatPricePlain(v) : null;
 
   // Update script.quote first, then update visible cells from the accepted quote.
   // This avoids flicker between raw WS values and normalized/rendered values.
@@ -1632,7 +1637,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Display the accepted quote only; raw WS ticks are normalized before reaching script.quote.
       const displayLtp = q.ltp !== '--' ? parseFloat(q.ltp) : null;
       const formattedLtp = displayLtp !== null
-        ? displayLtp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        ? formatPricePlain(displayLtp)
         : '--';
 
       // Safe depth access
