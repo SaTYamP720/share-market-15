@@ -43,6 +43,14 @@ let activeSession = {
   feedToken: null   // Needed for Angel One WebSocket authentication
 };
 
+// Protect the real session from being overwritten by guest logins
+let realSmartConnectSession = {
+  clientCode: null,
+  smartConnectInstance: null,
+  profile: null,
+  feedToken: null
+};
+
 // Load credentials config.json or environment variables
 let config = null;
 try {
@@ -118,6 +126,14 @@ async function attemptAutoLogin() {
       activeSession.feedToken = sessionData.data?.feedToken || null;
       const profileInfo = await smartConnect.getProfile();
       activeSession.profile = profileInfo.data;
+
+      // Keep real session copy
+      realSmartConnectSession = {
+        clientCode: activeSession.clientCode,
+        smartConnectInstance: activeSession.smartConnectInstance,
+        profile: activeSession.profile,
+        feedToken: activeSession.feedToken
+      };
     } else {
       console.error(`[Backend] Auto-login failed: ${sessionData.message}`);
     }
@@ -354,6 +370,14 @@ app.post('/api/login', async (req, res) => {
       const profileInfo = await smartConnect.getProfile();
       activeSession.profile = profileInfo.data;
       
+      // Keep real session copy
+      realSmartConnectSession = {
+        clientCode: activeSession.clientCode,
+        smartConnectInstance: activeSession.smartConnectInstance,
+        profile: activeSession.profile,
+        feedToken: activeSession.feedToken
+      };
+
       // Start Angel One WebSocket feed now that we have a real session
       setTimeout(initAngelOneWebSocket, 500);
 
@@ -423,8 +447,13 @@ app.get('/api/market-data', requireAuth, async (req, res) => {
     return res.status(400).json({ success: false, error: "Missing token parameter" });
   }
 
-  // Local test mode bypass
-  if (activeSession.clientCode === 'GUEST' || !activeSession.smartConnectInstance.generateSession) {
+  // Try to use the real session if available, otherwise fallback to the active session
+  const sessionToUse = (realSmartConnectSession.smartConnectInstance && realSmartConnectSession.smartConnectInstance.generateSession)
+                      ? realSmartConnectSession
+                      : activeSession;
+
+  // Local test mode bypass — only if there is absolutely no real session available
+  if (!sessionToUse.smartConnectInstance || !sessionToUse.smartConnectInstance.generateSession) {
     const seed = parseInt(token) || 5000;
     const ltp = (seed % 900) + 100 + (Math.random() * 5);
     const prevClose = ltp - (Math.random() * 6 - 3);
@@ -456,7 +485,7 @@ app.get('/api/market-data', requireAuth, async (req, res) => {
     exchangeTokens[exchange] = [token];
 
     // Request market quotes from Angel One
-    const response = await activeSession.smartConnectInstance.marketData({
+    const response = await sessionToUse.smartConnectInstance.marketData({
       mode: "FULL",
       exchangeTokens: exchangeTokens
     });
@@ -505,6 +534,38 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
     return res.json({ success: true, data: [] });
   }
 
+  // Try to use the real session if available, otherwise fallback to the active session
+  const sessionToUse = (realSmartConnectSession.smartConnectInstance && realSmartConnectSession.smartConnectInstance.generateSession)
+                      ? realSmartConnectSession
+                      : activeSession;
+
+  if (!sessionToUse.smartConnectInstance || !sessionToUse.smartConnectInstance.generateSession) {
+    // If no real session is available, return mock batch data
+    const mockResults = scripts.map(s => {
+      const seed = parseInt(s.token) || 5000;
+      const ltp = (seed % 900) + 100 + (Math.random() * 5);
+      const prevClose = ltp - (Math.random() * 6 - 3);
+      const change = ltp - prevClose;
+      const pctChange = (change / prevClose) * 100;
+      return {
+        exchange: s.exchange,
+        symbolToken: s.token,
+        ltp: ltp.toFixed(2),
+        open: (ltp * 0.99).toFixed(2),
+        high: (ltp * 1.02).toFixed(2),
+        low: (ltp * 0.98).toFixed(2),
+        close: prevClose.toFixed(2),
+        depth: {
+          buy: [{ price: (ltp - 0.5).toFixed(2), quantity: 150 }],
+          sell: [{ price: (ltp + 0.5).toFixed(2), quantity: 200 }]
+        },
+        netChange: change.toFixed(2),
+        percentChange: pctChange.toFixed(2)
+      };
+    });
+    return res.json({ success: true, data: mockResults });
+  }
+
   try {
     const exchangeTokens = {};
     scripts.forEach(s => {
@@ -513,7 +574,7 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
       exchangeTokens[ex].push(s.token);
     });
 
-    const response = await activeSession.smartConnectInstance.marketData({
+    const response = await sessionToUse.smartConnectInstance.marketData({
       mode: "FULL",
       exchangeTokens: exchangeTokens
     });
