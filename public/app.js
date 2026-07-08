@@ -112,26 +112,8 @@ socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange
 
   const fmt = (v) => v != null ? parseFloat(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
 
-  // Directly update LTP cells
-  document.querySelectorAll(`[data-ltp-key="${key}"]`).forEach(el => {
-    if (fmt(ltp)) el.textContent = fmt(ltp);
-  });
-
-  // Directly update Bid cells
-  if (bid != null) {
-    document.querySelectorAll(`[data-bid-key="${key}"]`).forEach(el => {
-      el.textContent = fmt(bid);
-    });
-  }
-
-  // Directly update Ask cells
-  if (ask != null) {
-    document.querySelectorAll(`[data-ask-key="${key}"]`).forEach(el => {
-      el.textContent = fmt(ask);
-    });
-  }
-
-  // Update script.quote with ALL new tick values for P&L, details panel, etc.
+  // Update script.quote first, then update visible cells from the accepted quote.
+  // This avoids flicker between raw WS values and normalized/rendered values.
   if (window._addedScriptsRef) {
     window._addedScriptsRef.forEach(script => {
       const exchMap = { 'nse_cm': 1, 'nse': 1, 'nse_fo': 2, 'nfo': 2, 'bse_cm': 3, 'bse': 3, 'bse_fo': 4, 'bfo': 4, 'mcx_fo': 5, 'mcx': 5, 'ncx_fo': 7, 'ncdex': 7, 'cde_fo': 13, 'cds': 13 };
@@ -139,6 +121,19 @@ socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange
       if (`${exchType}:${script.token}` === key) {
         if (!script.quote) script.quote = createQuoteFromWs(liveQuote);
         else patchQuoteFromWs(script.quote, liveQuote);
+
+        const q = script.quote;
+        document.querySelectorAll(`[data-ltp-key="${key}"]`).forEach(el => {
+          if (fmt(q.ltp)) el.textContent = fmt(q.ltp);
+        });
+        const acceptedBid = q.depth && q.depth.buy && q.depth.buy[0] ? q.depth.buy[0].price : null;
+        const acceptedAsk = q.depth && q.depth.sell && q.depth.sell[0] ? q.depth.sell[0].price : null;
+        if (acceptedBid != null && acceptedBid !== '--') {
+          document.querySelectorAll(`[data-bid-key="${key}"]`).forEach(el => { el.textContent = fmt(acceptedBid); });
+        }
+        if (acceptedAsk != null && acceptedAsk !== '--') {
+          document.querySelectorAll(`[data-ask-key="${key}"]`).forEach(el => { el.textContent = fmt(acceptedAsk); });
+        }
       }
     });
   }
