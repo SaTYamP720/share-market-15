@@ -23,37 +23,6 @@ function mergeWsQuote(key, quote) {
   return wsLiveQuotes[key];
 }
 
-const PRICE_FIELDS = ['ltp', 'bid', 'ask', 'open', 'high', 'low', 'close', 'netChange'];
-
-function normaliseLiveQuoteAgainstBaseline(scriptQuote, liveQuote) {
-  if (!scriptQuote || !liveQuote || liveQuote.ltp === undefined || liveQuote.ltp === null) return liveQuote;
-  const baseline = parseFloat(scriptQuote.ltp);
-  const incoming = parseFloat(liveQuote.ltp);
-  if (!Number.isFinite(baseline) || !Number.isFinite(incoming) || baseline <= 0 || incoming <= 0) return liveQuote;
-
-  const ratio = baseline / incoming;
-  let multiplier = 1;
-  if (ratio > 7 && ratio < 13) multiplier = 10;
-  else if (ratio > 70 && ratio < 130) multiplier = 100;
-  else if (ratio > 700 && ratio < 1300) multiplier = 1000;
-  else if (ratio > 0.07 && ratio < 0.13) multiplier = 0.1;
-  else if (ratio > 0.007 && ratio < 0.013) multiplier = 0.01;
-  else if (ratio > 0.0007 && ratio < 0.0013) multiplier = 0.001;
-  else if (ratio > 3 || ratio < 0.33) {
-    console.warn('[WS] Ignoring outlier tick', { baseline, incoming, ratio, liveQuote });
-    return null;
-  }
-
-  if (multiplier === 1) return liveQuote;
-  const adjusted = { ...liveQuote };
-  PRICE_FIELDS.forEach(field => {
-    if (adjusted[field] !== undefined && adjusted[field] !== null && Number.isFinite(parseFloat(adjusted[field]))) {
-      adjusted[field] = parseFloat((parseFloat(adjusted[field]) * multiplier).toFixed(4));
-    }
-  });
-  console.warn('[WS] Normalized tick scale', { baseline, incoming, multiplier, adjustedLtp: adjusted.ltp });
-  return adjusted;
-}
 
 function createQuoteFromWs(liveQuote) {
   const quote = {
@@ -72,20 +41,18 @@ function createQuoteFromWs(liveQuote) {
 
 function patchQuoteFromWs(scriptQuote, liveQuote) {
   if (!scriptQuote || !liveQuote) return false;
-  const adjusted = normaliseLiveQuoteAgainstBaseline(scriptQuote, liveQuote);
-  if (!adjusted) return false;
-  if (adjusted.ltp !== undefined && adjusted.ltp !== null) scriptQuote.ltp = adjusted.ltp;
-  if (adjusted.open !== undefined && adjusted.open !== null) scriptQuote.open = adjusted.open;
-  if (adjusted.high !== undefined && adjusted.high !== null) scriptQuote.high = adjusted.high;
-  if (adjusted.low !== undefined && adjusted.low !== null) scriptQuote.low = adjusted.low;
-  if (adjusted.close !== undefined && adjusted.close !== null) scriptQuote.close = adjusted.close;
-  if (adjusted.netChange !== undefined && adjusted.netChange !== null) scriptQuote.netChange = adjusted.netChange;
-  if (adjusted.pctChange !== undefined && adjusted.pctChange !== null) scriptQuote.percentChange = adjusted.pctChange;
+  if (liveQuote.ltp !== undefined && liveQuote.ltp !== null) scriptQuote.ltp = liveQuote.ltp;
+  if (liveQuote.open !== undefined && liveQuote.open !== null) scriptQuote.open = liveQuote.open;
+  if (liveQuote.high !== undefined && liveQuote.high !== null) scriptQuote.high = liveQuote.high;
+  if (liveQuote.low !== undefined && liveQuote.low !== null) scriptQuote.low = liveQuote.low;
+  if (liveQuote.close !== undefined && liveQuote.close !== null) scriptQuote.close = liveQuote.close;
+  if (liveQuote.netChange !== undefined && liveQuote.netChange !== null) scriptQuote.netChange = liveQuote.netChange;
+  if (liveQuote.pctChange !== undefined && liveQuote.pctChange !== null) scriptQuote.percentChange = liveQuote.pctChange;
   scriptQuote.depth = scriptQuote.depth || { buy: [], sell: [] };
   scriptQuote.depth.buy = scriptQuote.depth.buy || [];
   scriptQuote.depth.sell = scriptQuote.depth.sell || [];
-  if (adjusted.bid !== undefined && adjusted.bid !== null) scriptQuote.depth.buy[0] = { price: adjusted.bid, quantity: 0, orders: 0 };
-  if (adjusted.ask !== undefined && adjusted.ask !== null) scriptQuote.depth.sell[0] = { price: adjusted.ask, quantity: 0, orders: 0 };
+  if (liveQuote.bid !== undefined && liveQuote.bid !== null) scriptQuote.depth.buy[0] = { price: liveQuote.bid, quantity: 0, orders: 0 };
+  if (liveQuote.ask !== undefined && liveQuote.ask !== null) scriptQuote.depth.sell[0] = { price: liveQuote.ask, quantity: 0, orders: 0 };
   return true;
 }
 
@@ -171,6 +138,23 @@ document.addEventListener('DOMContentLoaded', () => {
   let clientCode = null;
   let userName = null;
   let addedScripts = [];
+
+  function stripRuntimeQuote(script) {
+    if (!script || typeof script !== 'object') return script;
+    const { quote, ...savedScript } = script;
+    return savedScript;
+  }
+
+  function loadSavedWatchlist(email) {
+    try {
+      const cleaned = JSON.parse(localStorage.getItem('watchlist_' + email) || '[]').map(stripRuntimeQuote);
+      localStorage.setItem('watchlist_' + email, JSON.stringify(cleaned));
+      return cleaned;
+    } catch (err) {
+      console.warn('[Watchlist] Failed to load saved watchlist', err);
+      return [];
+    }
+  }
   let selectedScript = null;
   let positionQuoteCache = {}; // Cache live quotes for open positions not in watchlist
 
@@ -683,7 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
     activePlatformUser = user;
     localStorage.setItem('activePlatformUser', JSON.stringify(user));
 
-    addedScripts = JSON.parse(localStorage.getItem('watchlist_' + activePlatformUser.email) || '[]');
+    addedScripts = loadSavedWatchlist(activePlatformUser.email);
 
     showToast(`Welcome back, ${user.name}!`, "success");
     updateHeaderBalance();
@@ -757,7 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function saveWatchlist() {
     if (activePlatformUser) {
-      localStorage.setItem('watchlist_' + activePlatformUser.email, JSON.stringify(addedScripts));
+      localStorage.setItem('watchlist_' + activePlatformUser.email, JSON.stringify(addedScripts.map(stripRuntimeQuote)));
     }
     // Keep global ref so wsSubscribeAll can access it outside DOMContentLoaded scope
     window._addedScriptsRef = addedScripts;
@@ -798,7 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (activePlatformUser) {
       document.getElementById('settings-nav-text').textContent = 'Logout';
-      addedScripts = JSON.parse(localStorage.getItem('watchlist_' + activePlatformUser.email) || '[]');
+      addedScripts = loadSavedWatchlist(activePlatformUser.email);
       window._addedScriptsRef = addedScripts;
       // STEP 3: Subscribe all watchlist tokens on startup
       wsSubscribeAll();
