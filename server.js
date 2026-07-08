@@ -195,8 +195,14 @@ async function initAngelOneWebSocket() {
       feedtype: feedtoken
     });
 
+    let _firstTick = true;
     wsInstance.on('tick', (tickData) => {
       if (!tickData || !tickData.token) return;
+      if (_firstTick) {
+        console.log('[AngelWS] === RAW FIRST TICK ===');
+        console.log(JSON.stringify(tickData, null, 2));
+        _firstTick = false;
+      }
       
       // Clean token string (smartapi-javascript parser leaves double quotes and null characters)
       const cleanToken = (tickData.token || '').replace(/["'\s\u0000]/g, '').trim();
@@ -863,7 +869,7 @@ io.on('connection', (socket) => {
   // Send current cache snapshot so the new user sees prices immediately
   if (priceCache.size > 0) {
     const snapshot = {};
-    priceCache.forEach((val, key) => { snapshot[key] = val.ltp; });
+    priceCache.forEach((val, key) => { snapshot[key] = val; });
     socket.emit('price_snapshot', snapshot);
   }
 
@@ -871,22 +877,31 @@ io.on('connection', (socket) => {
   // payload: { tokens: [ { exchange: 'NSE', token: '1234' }, ... ] }
   socket.on('ws_subscribe', ({ tokens }) => {
     if (!Array.isArray(tokens) || tokens.length === 0) return;
+    console.log(`[WS] ws_subscribe from ${socket.id}: ${tokens.length} tokens — ${JSON.stringify(tokens.slice(0, 3))}`);
     const mySubscriptions = socketSubscriptions.get(socket.id);
     const toSubscribe = [];
     for (const { exchange, token } of tokens) {
       const exchType = getExchangeTypeInt(exchange);
       const key = `${exchType}:${token}`;
+      console.log(`[WS] Resolved: exchange="${exchange}" => exchType=${exchType} => key="${key}"`);
       if (!mySubscriptions.has(key)) {
         mySubscriptions.add(key);
         toSubscribe.push({ exchangeType: exchType, token: String(token) });
-        // If already in cache, send immediately to this socket
+        // If already in cache, send full tick immediately to this socket
         if (priceCache.has(key)) {
-          socket.emit('price_tick', { key, ltp: priceCache.get(key).ltp, token });
+          const cached = priceCache.get(key);
+          socket.emit('price_tick', { key, ...cached });
         }
       }
     }
-    if (toSubscribe.length > 0) wsSubscribeTokens(toSubscribe);
+    if (toSubscribe.length > 0) {
+      console.log(`[WS] Subscribing ${toSubscribe.length} NEW tokens on Angel One WS`);
+      wsSubscribeTokens(toSubscribe);
+    } else {
+      console.log(`[WS] All tokens already subscribed`);
+    }
   });
+
 
   // STEP 3: Browser tells server which tokens to unsubscribe
   socket.on('ws_unsubscribe', ({ tokens }) => {

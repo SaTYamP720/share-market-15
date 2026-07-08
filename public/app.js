@@ -3,8 +3,41 @@
 // =============================================
 const socket = io();
 
-// STEP 3: Live price map — token key "EXCHANGETYPE:TOKEN" => ltp
+// STEP 3: Live quote maps - token key "EXCHANGETYPE:TOKEN" => latest price / full tick
 const wsLivePrices = {};
+const wsLiveQuotes = {};
+
+function normaliseWsQuote(value) {
+  if (value && typeof value === 'object') return value;
+  return value !== undefined && value !== null ? { ltp: value } : null;
+}
+
+function mergeWsQuote(key, quote) {
+  const next = normaliseWsQuote(quote);
+  if (!next) return null;
+  const prev = wsLiveQuotes[key] || {};
+  wsLiveQuotes[key] = { ...prev, ...next };
+  if (wsLiveQuotes[key].ltp !== undefined && wsLiveQuotes[key].ltp !== null) {
+    wsLivePrices[key] = wsLiveQuotes[key].ltp;
+  }
+  return wsLiveQuotes[key];
+}
+
+function patchQuoteFromWs(scriptQuote, liveQuote) {
+  if (!scriptQuote || !liveQuote) return;
+  if (liveQuote.ltp !== undefined && liveQuote.ltp !== null) scriptQuote.ltp = liveQuote.ltp;
+  if (liveQuote.open !== undefined && liveQuote.open !== null) scriptQuote.open = liveQuote.open;
+  if (liveQuote.high !== undefined && liveQuote.high !== null) scriptQuote.high = liveQuote.high;
+  if (liveQuote.low !== undefined && liveQuote.low !== null) scriptQuote.low = liveQuote.low;
+  if (liveQuote.close !== undefined && liveQuote.close !== null) scriptQuote.close = liveQuote.close;
+  if (liveQuote.netChange !== undefined && liveQuote.netChange !== null) scriptQuote.netChange = liveQuote.netChange;
+  if (liveQuote.pctChange !== undefined && liveQuote.pctChange !== null) scriptQuote.percentChange = liveQuote.pctChange;
+  scriptQuote.depth = scriptQuote.depth || { buy: [], sell: [] };
+  scriptQuote.depth.buy = scriptQuote.depth.buy || [];
+  scriptQuote.depth.sell = scriptQuote.depth.sell || [];
+  if (liveQuote.bid !== undefined && liveQuote.bid !== null) scriptQuote.depth.buy[0] = { price: liveQuote.bid, quantity: 0, orders: 0 };
+  if (liveQuote.ask !== undefined && liveQuote.ask !== null) scriptQuote.depth.sell[0] = { price: liveQuote.ask, quantity: 0, orders: 0 };
+}
 
 socket.on('connect', () => {
   console.log('[WS] Connected to server. Socket ID:', socket.id);
@@ -18,14 +51,14 @@ socket.on('disconnect', () => {
 
 // Incoming: full snapshot when first connecting
 socket.on('price_snapshot', (snapshot) => {
-  Object.assign(wsLivePrices, snapshot);
+  Object.entries(snapshot || {}).forEach(([key, quote]) => mergeWsQuote(key, quote));
   console.log(`[WS] Received price snapshot: ${Object.keys(snapshot).length} tokens`);
 });
 
-// Incoming: live price tick — immediately update ALL price cells (LTP, Bid, Ask, Change)
+// Incoming: live price tick - immediately update ALL price cells (LTP, Bid, Ask, Change)
 socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange, pctChange }) => {
-  // Store in local cache
-  wsLivePrices[key] = ltp;
+  // Store the full live tick locally so bid/ask do not stay stuck at the first REST quote.
+  const liveQuote = mergeWsQuote(key, { ltp, bid, ask, open, high, low, close, netChange, pctChange });
 
   const fmt = (v) => v != null ? parseFloat(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
 
@@ -54,12 +87,7 @@ socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange
       const exchMap = { 'nse_cm': 1, 'nse': 1, 'nse_fo': 2, 'nfo': 2, 'bse_cm': 3, 'bse': 3, 'bse_fo': 4, 'bfo': 4, 'mcx_fo': 5, 'mcx': 5, 'ncx_fo': 7, 'ncdex': 7, 'cde_fo': 13, 'cds': 13 };
       const exchType = exchMap[(script.exchange || '').toLowerCase()] || 1;
       if (`${exchType}:${script.token}` === key && script.quote && script.quote.open !== undefined) {
-        script.quote.ltp        = ltp;
-        if (bid  != null) script.quote.depth = script.quote.depth || { buy: [], sell: [] };
-        if (bid  != null && script.quote.depth.buy)  script.quote.depth.buy[0]  = { price: bid,  quantity: 0, orders: 0 };
-        if (ask  != null && script.quote.depth.sell) script.quote.depth.sell[0] = { price: ask, quantity: 0, orders: 0 };
-        if (netChange != null) script.quote.netChange     = netChange;
-        if (pctChange != null) script.quote.percentChange = pctChange;
+        patchQuoteFromWs(script.quote, liveQuote);
       }
     });
   }
@@ -653,9 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Helper: get LTP for a script from wsLivePrices (accessible from any function in scope)
-  // Supports both short exchange names (NSE, MCX) and exch_seg names (nse_cm, mcx_fo)
-  function getLtpFromWS(exchange, token) {
+  function getWsKey(exchange, token) {
     const clean = (exchange || '').toLowerCase();
     let exchType = 1;
     if (clean === 'nse_cm' || clean === 'nse') exchType = 1;
@@ -665,8 +691,20 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (clean === 'mcx_fo' || clean === 'mcx') exchType = 5;
     else if (clean === 'ncx_fo' || clean === 'ncdex') exchType = 7;
     else if (clean === 'cde_fo' || clean === 'cds') exchType = 13;
-    const key = `${exchType}:${token}`;
-    return wsLivePrices[key] !== undefined ? parseFloat(wsLivePrices[key]) : null;
+    return `${exchType}:${token}`;
+  }
+
+  function getLiveQuoteFromWS(exchange, token) {
+    return wsLiveQuotes[getWsKey(exchange, token)] || null;
+  }
+
+  // Helper: get LTP for a script from wsLivePrices (accessible from any function in scope)
+  // Supports both short exchange names (NSE, MCX) and exch_seg names (nse_cm, mcx_fo)
+  function getLtpFromWS(exchange, token) {
+    const key = getWsKey(exchange, token);
+    const quote = wsLiveQuotes[key];
+    const ltp = quote && quote.ltp !== undefined ? quote.ltp : wsLivePrices[key];
+    return ltp !== undefined && ltp !== null ? parseFloat(ltp) : null;
   }
 
 
@@ -1651,8 +1689,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const result = await response.json();
       console.log('[Quote] Response for', script.code, ':', JSON.stringify(result).substring(0, 200));
       if (result.success && result.data) {
-        const wsLtp = getLtpFromWS(script.exchange, script.token);
-        result.data.ltp = wsLtp !== null ? wsLtp : result.data.ltp;
+        const liveQuote = getLiveQuoteFromWS(script.exchange, script.token);
+        if (liveQuote) {
+          patchQuoteFromWs(result.data, liveQuote);
+        } else {
+          const wsLtp = getLtpFromWS(script.exchange, script.token);
+          result.data.ltp = wsLtp !== null ? wsLtp : result.data.ltp;
+        }
         script.quote = result.data;
         console.log('[Quote] Set quote for', script.code, '| LTP:', result.data.ltp, '| Bid:', result.data.depth?.buy?.[0]?.price, '| Ask:', result.data.depth?.sell?.[0]?.price);
         renderWatchlistTable();
@@ -2383,16 +2426,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!apiConnected) return;
       updateMarketStatusBadge();
 
-      // Update LTP for every watchlist script using WS prices (only if full quote already loaded)
+      // Update every watchlist script using the latest full WS tick.
       addedScripts.forEach(script => {
-        const ltp = getLtpFromWS(script.exchange, script.token);
-        if (ltp !== null) {
-          if (script.quote && script.quote.open !== undefined) {
-            // Full REST quote exists — safely update just the LTP
-            script.quote.ltp = ltp;
-          }
-          // If no full quote yet, fetchQuoteForScript will be called by renderWatchlistTable
+        const liveQuote = getLiveQuoteFromWS(script.exchange, script.token);
+        if (liveQuote && script.quote && script.quote.open !== undefined) {
+          patchQuoteFromWs(script.quote, liveQuote);
         }
+        // If no full quote yet, fetchQuoteForScript will be called by renderWatchlistTable
       });
 
       // Update positionQuoteCache for open positions from WS prices
@@ -2400,10 +2440,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
         positions.filter(p => p.userEmail === activePlatformUser.email && p.status === 'OPEN')
           .forEach(pos => {
-            const ltp = getLtpFromWS(pos.exchange, pos.token);
-            if (ltp !== null) {
+            const liveQuote = getLiveQuoteFromWS(pos.exchange, pos.token);
+            if (liveQuote) {
               if (!positionQuoteCache[pos.token]) positionQuoteCache[pos.token] = {};
-              positionQuoteCache[pos.token].ltp = ltp;
+              patchQuoteFromWs(positionQuoteCache[pos.token], liveQuote);
             }
           });
       }
