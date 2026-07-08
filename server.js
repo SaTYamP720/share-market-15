@@ -202,30 +202,43 @@ async function initAngelOneWebSocket() {
       const cleanToken = (tickData.token || '').replace(/["'\s\u0000]/g, '').trim();
       const tokenKey = `${tickData.exchange_type}:${cleanToken}`;
       
-      const rawLtp = parseFloat(tickData.last_traded_price || 0);
-      
-      // Angel One WebSocket feeds send all prices as scaled integers:
-      // - CDS (Currency) is multiplied by 10000 (4 decimal places)
-      // - NSE, BSE, NFO, BFO, MCX, NCDEX are multiplied by 100 (2 decimal places)
-      let ltp = rawLtp;
       const exchType = parseInt(tickData.exchange_type);
-      if (exchType === 13) {
-        ltp = rawLtp / 10000;
-      } else {
-        ltp = rawLtp / 100;
-      }
+      // Angel One WebSocket sends all prices as scaled integers:
+      // - CDS (Currency, exchType=13) is multiplied by 10000
+      // - All others (NSE, BSE, NFO, MCX, etc.) multiplied by 100
+      const divisor = exchType === 13 ? 10000 : 100;
 
-      console.log(`[AngelWS] Tick - Token: ${cleanToken} | ExchangeType: ${tickData.exchange_type} | RawLTP: ${rawLtp} | ComputedLTP: ${ltp}`);
+      const scale = (raw) => raw ? parseFloat(raw) / divisor : null;
+
+      const ltp   = scale(tickData.last_traded_price) || 0;
+      const open  = scale(tickData.open_price_of_the_day);
+      const high  = scale(tickData.high_price_of_the_day);
+      const low   = scale(tickData.low_price_of_the_day);
+      const close = scale(tickData.closed_price);
+
+      // Extract top bid and ask from market depth arrays
+      const buyDepth  = tickData.best_5_buy_data  || [];
+      const sellDepth = tickData.best_5_sell_data || [];
+      const bid = buyDepth[0]  ? scale(buyDepth[0].price)  : null;
+      const ask = sellDepth[0] ? scale(sellDepth[0].price) : null;
+
+      // Net change vs previous close
+      const netChange = (close && close > 0) ? parseFloat((ltp - close).toFixed(2)) : null;
+      const pctChange = (close && close > 0) ? parseFloat(((ltp - close) / close * 100).toFixed(2)) : null;
+
+      console.log(`[AngelWS] Tick - Token: ${cleanToken} | ExchType: ${exchType} | LTP: ${ltp} | Bid: ${bid} | Ask: ${ask}`);
 
       priceCache.set(tokenKey, {
-        ltp,
+        ltp, bid, ask, open, high, low, close, netChange, pctChange,
         token: cleanToken,
         exchangeType: tickData.exchange_type,
         ts: Date.now()
       });
-      // Broadcast to all browser clients
-      io.emit('price_tick', { key: tokenKey, ltp, token: cleanToken });
+
+      // Broadcast ALL fields to all browser clients in one event
+      io.emit('price_tick', { key: tokenKey, ltp, bid, ask, open, high, low, close, netChange, pctChange, token: cleanToken });
     });
+
 
     await wsInstance.connect();
     angelWSState.instance = wsInstance;

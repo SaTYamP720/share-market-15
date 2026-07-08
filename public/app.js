@@ -22,31 +22,44 @@ socket.on('price_snapshot', (snapshot) => {
   console.log(`[WS] Received price snapshot: ${Object.keys(snapshot).length} tokens`);
 });
 
-// Incoming: live price tick for a single token — update immediately on every tick
-socket.on('price_tick', ({ key, ltp }) => {
+// Incoming: live price tick — immediately update ALL price cells (LTP, Bid, Ask, Change)
+socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange, pctChange }) => {
+  // Store in local cache
   wsLivePrices[key] = ltp;
-  const formatted = parseFloat(ltp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  console.log(`[WS Tick] key=${key} ltp=${ltp}`);
 
-  // Immediately update any DOM element tagged with this token key
-  document.querySelectorAll(`[data-ws-key="${key}"]`).forEach(el => {
-    el.textContent = formatted;
-  });
+  const fmt = (v) => v != null ? parseFloat(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
 
-  // Also directly update the LTP cell in the watchlist table rows
+  // Directly update LTP cells
   document.querySelectorAll(`[data-ltp-key="${key}"]`).forEach(el => {
-    el.textContent = formatted;
+    if (fmt(ltp)) el.textContent = fmt(ltp);
   });
 
-  // Update script.quote.ltp immediately so details panel and P&L are accurate
+  // Directly update Bid cells
+  if (bid != null) {
+    document.querySelectorAll(`[data-bid-key="${key}"]`).forEach(el => {
+      el.textContent = fmt(bid);
+    });
+  }
+
+  // Directly update Ask cells
+  if (ask != null) {
+    document.querySelectorAll(`[data-ask-key="${key}"]`).forEach(el => {
+      el.textContent = fmt(ask);
+    });
+  }
+
+  // Update script.quote with ALL new tick values for P&L, details panel, etc.
   if (window._addedScriptsRef) {
     window._addedScriptsRef.forEach(script => {
       const exchMap = { 'nse_cm': 1, 'nse': 1, 'nse_fo': 2, 'nfo': 2, 'bse_cm': 3, 'bse': 3, 'bse_fo': 4, 'bfo': 4, 'mcx_fo': 5, 'mcx': 5, 'ncx_fo': 7, 'ncdex': 7, 'cde_fo': 13, 'cds': 13 };
       const exchType = exchMap[(script.exchange || '').toLowerCase()] || 1;
-      if (`${exchType}:${script.token}` === key) {
-        if (script.quote && script.quote.open !== undefined) {
-          script.quote.ltp = ltp;
-        }
+      if (`${exchType}:${script.token}` === key && script.quote && script.quote.open !== undefined) {
+        script.quote.ltp        = ltp;
+        if (bid  != null) script.quote.depth = script.quote.depth || { buy: [], sell: [] };
+        if (bid  != null && script.quote.depth.buy)  script.quote.depth.buy[0]  = { price: bid,  quantity: 0, orders: 0 };
+        if (ask  != null && script.quote.depth.sell) script.quote.depth.sell[0] = { price: ask, quantity: 0, orders: 0 };
+        if (netChange != null) script.quote.netChange     = netChange;
+        if (pctChange != null) script.quote.percentChange = pctChange;
       }
     });
   }
@@ -1568,8 +1581,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="font-size: 10px; color: #a0aec0; font-weight: normal; margin-top: 2px;">${script.name}</div>
         </td>
         <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${script.exchange}</span></td>
-        <td style="color: #38a169; font-weight: 500;">${bidPrice}</td>
-        <td style="color: #e53e3e; font-weight: 500;">${askPrice}</td>
+        <td style="color: #38a169; font-weight: 500;" data-bid-key="${wsKeyForRow}">${bidPrice}</td>
+        <td style="color: #e53e3e; font-weight: 500;" data-ask-key="${wsKeyForRow}">${askPrice}</td>
         <td style="color: ${changeColor}; font-size: 11px; font-weight: 500;">
           <div>${changeSign}${q.netChange}</div>
           <div style="font-size: 9px; margin-top: 2px;">${changeSign}${q.percentChange}%</div>
