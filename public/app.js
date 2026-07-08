@@ -733,6 +733,43 @@ document.addEventListener('DOMContentLoaded', () => {
     return wsLiveQuotes[getWsKey(exchange, token)] || null;
   }
 
+  function syncScriptQuoteFromLive(script) {
+    if (!script) return null;
+
+    const liveQuote = getLiveQuoteFromWS(script.exchange, script.token);
+    const watchlistScript = addedScripts.find(s => getWsKey(s.exchange, s.token) === getWsKey(script.exchange, script.token));
+    const targetScript = watchlistScript || script;
+
+    if (liveQuote) {
+      if (!targetScript.quote) targetScript.quote = createQuoteFromWs(liveQuote);
+      else patchQuoteFromWs(targetScript.quote, liveQuote);
+    }
+
+    if (watchlistScript && script !== watchlistScript) {
+      script.quote = watchlistScript.quote || script.quote || null;
+    }
+
+    return targetScript.quote || script.quote || null;
+  }
+
+  function getLatestQuoteForSelectedScript() {
+    if (!selectedScript) return null;
+    const watchlistScript = addedScripts.find(s => getWsKey(s.exchange, s.token) === getWsKey(selectedScript.exchange, selectedScript.token));
+    if (watchlistScript) selectedScript = watchlistScript;
+    return syncScriptQuoteFromLive(selectedScript);
+  }
+
+  function getQuoteSidePrices(quote) {
+    const ltp = parseFloat(quote && quote.ltp);
+    const bidPrice = quote && quote.depth && quote.depth.buy && quote.depth.buy.length > 0
+      ? parseFloat(quote.depth.buy[0].price)
+      : ltp;
+    const askPrice = quote && quote.depth && quote.depth.sell && quote.depth.sell.length > 0
+      ? parseFloat(quote.depth.sell[0].price)
+      : ltp;
+    return { ltp, bidPrice, askPrice };
+  }
+
   // Helper: get LTP for a script from wsLivePrices (accessible from any function in scope)
   // Supports both short exchange names (NSE, MCX) and exch_seg names (nse_cm, mcx_fo)
   function getLtpFromWS(exchange, token) {
@@ -1691,6 +1728,7 @@ document.addEventListener('DOMContentLoaded', () => {
       tr.addEventListener('click', (e) => {
         if (e.target.closest('.btn-delete-watchlist')) return;
         selectedScript = script;
+        syncScriptQuoteFromLive(selectedScript);
         renderWatchlistTable();
         renderDetailsPanel();
       });
@@ -1776,7 +1814,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const q = selectedScript.quote || {
+    const latestQuote = getLatestQuoteForSelectedScript();
+    const q = latestQuote || selectedScript.quote || {
       ltp: '0.00',
       netChange: '0.00',
       percentChange: '0.00',
@@ -2107,9 +2146,8 @@ document.addEventListener('DOMContentLoaded', () => {
     detailsPanel.querySelector('.btn-buy-action').addEventListener('click', async () => {
       if (!activePlatformUser) { showToast('Please log in to place trades!', 'warning'); return; }
 
-      const ltp = parseFloat(q.ltp);
-      const askPrice = q.depth && q.depth.sell && q.depth.sell.length > 0 ? parseFloat(q.depth.sell[0].price) : ltp;
-      const bidPrice = q.depth && q.depth.buy && q.depth.buy.length > 0 ? parseFloat(q.depth.buy[0].price) : ltp;
+      const latestClickQuote = getLatestQuoteForSelectedScript() || q;
+      const { askPrice } = getQuoteSidePrices(latestClickQuote);
 
       if (isNaN(askPrice) || askPrice <= 0) { showToast('Wait for live quotes to load before buying!', 'warning'); return; }
 
@@ -2192,9 +2230,8 @@ document.addEventListener('DOMContentLoaded', () => {
     detailsPanel.querySelector('.btn-sell-action').addEventListener('click', async () => {
       if (!activePlatformUser) { showToast('Please log in to place trades!', 'warning'); return; }
 
-      const ltp = parseFloat(q.ltp);
-      const bidPrice = q.depth && q.depth.buy && q.depth.buy.length > 0 ? parseFloat(q.depth.buy[0].price) : ltp;
-      const askPrice = q.depth && q.depth.sell && q.depth.sell.length > 0 ? parseFloat(q.depth.sell[0].price) : ltp;
+      const latestClickQuote = getLatestQuoteForSelectedScript() || q;
+      const { bidPrice } = getQuoteSidePrices(latestClickQuote);
 
       if (isNaN(bidPrice) || bidPrice <= 0) { showToast('Wait for live quotes to load before selling!', 'warning'); return; }
 
@@ -2507,11 +2544,10 @@ document.addEventListener('DOMContentLoaded', () => {
       updateTopbarStats();
 
       if (selectedScript) {
-        const updated = addedScripts.find(s => s.code === selectedScript.code);
-        if (updated && updated.quote) {
-          selectedScript = updated;
+        const latestQuote = getLatestQuoteForSelectedScript();
+        if (latestQuote) {
           renderDetailsPanel();
-          updateOrderModalLiveQuote(updated.quote);
+          updateOrderModalLiveQuote(latestQuote);
         }
       }
     }, 500);
