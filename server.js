@@ -211,12 +211,13 @@ async function initAngelOneWebSocket() {
       const scale = (raw) => raw ? parseFloat(raw) / divisor : null;
 
       const ltp   = scale(tickData.last_traded_price) || 0;
-      const open  = scale(tickData.open_price_of_the_day);
-      const high  = scale(tickData.high_price_of_the_day);
-      const low   = scale(tickData.low_price_of_the_day);
-      const close = scale(tickData.closed_price);
+      // FULL mode field names from smartapi-javascript library (websocket2.0.js):
+      const open  = scale(tickData.open_price_day);
+      const high  = scale(tickData.high_price_day);
+      const low   = scale(tickData.low_price_day);
+      const close = scale(tickData.close_price);
 
-      // Extract top bid and ask from market depth arrays
+      // Extract top bid and ask from market depth (only in FULL mode = 3)
       const buyDepth  = tickData.best_5_buy_data  || [];
       const sellDepth = tickData.best_5_sell_data || [];
       const bid = buyDepth[0]  ? scale(buyDepth[0].price)  : null;
@@ -226,7 +227,7 @@ async function initAngelOneWebSocket() {
       const netChange = (close && close > 0) ? parseFloat((ltp - close).toFixed(2)) : null;
       const pctChange = (close && close > 0) ? parseFloat(((ltp - close) / close * 100).toFixed(2)) : null;
 
-      console.log(`[AngelWS] Tick - Token: ${cleanToken} | ExchType: ${exchType} | LTP: ${ltp} | Bid: ${bid} | Ask: ${ask}`);
+      console.log(`[AngelWS] Tick | Token: ${cleanToken} | LTP: ${ltp} | Bid: ${bid} | Ask: ${ask} | Open: ${open} | Close: ${close}`);
 
       priceCache.set(tokenKey, {
         ltp, bid, ask, open, high, low, close, netChange, pctChange,
@@ -265,8 +266,8 @@ function wsSubscribeTokens(tokenList) {
     if (tokens.length === 0) continue;
     angelWSState.instance.fetchData({
       correlationID: `sub_${Date.now()}`,
-      action: 1, // Subscribe
-      mode: 1,   // LTP
+      action: 1,  // 1 = Subscribe
+      mode: 3,    // 3 = FULL (LTP + Bid/Ask depth + OHLC). Mode 1 = LTP only.
       exchangeType: parseInt(exchType),
       tokens
     });
@@ -291,8 +292,8 @@ function wsUnsubscribeTokens(tokenList) {
     if (tokens.length === 0) continue;
     angelWSState.instance.fetchData({
       correlationID: `unsub_${Date.now()}`,
-      action: 0, // Unsubscribe
-      mode: 1,
+      action: 0,  // 0 = Unsubscribe
+      mode: 3,    // Must match subscribe mode
       exchangeType: parseInt(exchType),
       tokens
     });
