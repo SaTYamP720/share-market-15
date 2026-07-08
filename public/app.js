@@ -22,14 +22,36 @@ socket.on('price_snapshot', (snapshot) => {
   console.log(`[WS] Received price snapshot: ${Object.keys(snapshot).length} tokens`);
 });
 
-// Incoming: live price tick for a single token
+// Incoming: live price tick for a single token — update immediately on every tick
 socket.on('price_tick', ({ key, ltp }) => {
   wsLivePrices[key] = ltp;
-  // Refresh visible price cells with this token in real-time
+  const formatted = parseFloat(ltp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  console.log(`[WS Tick] key=${key} ltp=${ltp}`);
+
+  // Immediately update any DOM element tagged with this token key
   document.querySelectorAll(`[data-ws-key="${key}"]`).forEach(el => {
-    el.textContent = '₹' + parseFloat(ltp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    el.textContent = formatted;
   });
+
+  // Also directly update the LTP cell in the watchlist table rows
+  document.querySelectorAll(`[data-ltp-key="${key}"]`).forEach(el => {
+    el.textContent = formatted;
+  });
+
+  // Update script.quote.ltp immediately so details panel and P&L are accurate
+  if (window._addedScriptsRef) {
+    window._addedScriptsRef.forEach(script => {
+      const exchMap = { 'nse_cm': 1, 'nse': 1, 'nse_fo': 2, 'nfo': 2, 'bse_cm': 3, 'bse': 3, 'bse_fo': 4, 'bfo': 4, 'mcx_fo': 5, 'mcx': 5, 'ncx_fo': 7, 'ncdex': 7, 'cde_fo': 13, 'cds': 13 };
+      const exchType = exchMap[(script.exchange || '').toLowerCase()] || 1;
+      if (`${exchType}:${script.token}` === key) {
+        if (script.quote && script.quote.open !== undefined) {
+          script.quote.ltp = ltp;
+        }
+      }
+    });
+  }
 });
+
 
 // Subscribe ALL current watchlist tokens to the server
 function wsSubscribeAll() {
@@ -1536,6 +1558,10 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.style.backgroundColor = '#edf2f7';
       }
 
+      // Build the ws key for this script (same format as server: "exchType:token")
+      const exchTypeMap = { 'nse_cm': 1, 'nse': 1, 'nse_fo': 2, 'nfo': 2, 'bse_cm': 3, 'bse': 3, 'bse_fo': 4, 'bfo': 4, 'mcx_fo': 5, 'mcx': 5, 'ncx_fo': 7, 'ncdex': 7, 'cde_fo': 13, 'cds': 13 };
+      const wsKeyForRow = `${exchTypeMap[(script.exchange || '').toLowerCase()] || 1}:${script.token}`;
+
       tr.innerHTML = `
         <td class="scrip-col bold" style="padding-left: 20px;">
           <div>${script.code}</div>
@@ -1552,7 +1578,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>${q.low || '--'}</td>
         <td>${q.open || '--'}</td>
         <td>${q.close || '--'}</td>
-        <td class="bold" style="color: ${changeColor};">${formattedLtp}</td>
+        <td class="bold" style="color: ${changeColor};" data-ltp-key="${wsKeyForRow}">${formattedLtp}</td>
         <td style="text-align: center; vertical-align: middle; padding: 0 10px;">
           <button class="btn-delete-watchlist" data-code="${script.code}" style="background: none; border: none; padding: 4px; cursor: pointer; color: #a0aec0; transition: color 0.2s; display: flex; align-items: center; justify-content: center;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
@@ -1564,6 +1590,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </button>
         </td>
       `;
+
 
 
       // Select active script row on click (unless delete is clicked)
