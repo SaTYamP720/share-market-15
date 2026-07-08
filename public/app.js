@@ -774,6 +774,14 @@ document.addEventListener('DOMContentLoaded', () => {
     return { ltp, bidPrice, askPrice };
   }
 
+  function getQuoteTradePrice(quote) {
+    const { ltp, bidPrice, askPrice } = getQuoteSidePrices(quote);
+    if (Number.isFinite(ltp) && ltp > 0) return ltp;
+    if (Number.isFinite(askPrice) && askPrice > 0) return askPrice;
+    if (Number.isFinite(bidPrice) && bidPrice > 0) return bidPrice;
+    return NaN;
+  }
+
   let selectedDetailsFrame = null;
   window._refreshSelectedDetailsFromTick = (key, liveQuote) => {
     if (!selectedScript) return;
@@ -1858,6 +1866,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawAsk = q.depth && q.depth.sell && q.depth.sell[0] ? parseFloat(q.depth.sell[0].price) : 0;
     const bidVal = rawBid > 0 ? rawBid : (parseFloat(q.ltp) || 0);
     const askVal = rawAsk > 0 ? rawAsk : (parseFloat(q.ltp) || 0);
+    const actionPrice = getQuoteTradePrice(q);
+    const displayActionPrice = Number.isFinite(actionPrice) && actionPrice > 0 ? actionPrice : (parseFloat(q.ltp) || 0);
 
     const exch = (selectedScript.exchange || '').toUpperCase();
     const now = new Date();
@@ -1979,10 +1989,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Buy / Sell Action buttons -->
         <div style="display: flex; gap: 12px; margin-top: 10px;">
           <button class="btn btn-sell-action" style="flex: 1; height: 42px; background-color: #fff5f5; border: 1px solid #e53e3e; border-radius: 8px; color: #e53e3e; font-weight: 700; cursor: pointer; transition: all 0.2s;">
-            SELL <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">₹${bidVal.toFixed(2)}</span>
+            SELL <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">₹${displayActionPrice.toFixed(2)}</span>
           </button>
           <button class="btn btn-buy-action" style="flex: 1; height: 42px; background-color: #e6fffa; border: 1px solid #38a169; border-radius: 8px; color: #38a169; font-weight: 700; cursor: pointer; transition: all 0.2s;">
-            BUY <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">@ ₹${askVal.toFixed(2)}</span>
+            BUY <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">@ ₹${displayActionPrice.toFixed(2)}</span>
           </button>
         </div>
       </div>
@@ -2012,7 +2022,7 @@ document.addEventListener('DOMContentLoaded', () => {
         symbolEl.textContent = selectedScript.code;
         exchBadge.textContent = selectedScript.exchange;
         priceEl.textContent = `₹${price.toFixed(2)}`;
-        priceLabelEl.textContent = side === 'BUY' ? 'ASK PRICE' : 'BID PRICE';
+        priceLabelEl.textContent = 'LIVE PRICE';
         
         actionBadge.textContent = side === 'BUY' ? 'BUY' : 'SELL';
         actionBadge.style.background = side === 'BUY' ? '#e6fffa' : '#fff5f5';
@@ -2171,17 +2181,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!activePlatformUser) { showToast('Please log in to place trades!', 'warning'); return; }
 
       const latestClickQuote = getLatestQuoteForSelectedScript() || q;
-      const { askPrice } = getQuoteSidePrices(latestClickQuote);
+      const buyPrice = getQuoteTradePrice(latestClickQuote);
 
-      if (isNaN(askPrice) || askPrice <= 0) { showToast('Wait for live quotes to load before buying!', 'warning'); return; }
+      if (isNaN(buyPrice) || buyPrice <= 0) { showToast('Wait for live quotes to load before buying!', 'warning'); return; }
 
       // Check if there's an open SHORT position → close it (Buy to cover)
       const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
       const openShort = positions.find(p => p.userEmail === activePlatformUser.email && p.symbol === selectedScript.code && p.status === 'OPEN' && (p.side || 'BUY') === 'SELL');
       if (openShort) {
-        const proceed = await showConfirm(`You have an open SHORT on ${selectedScript.code}.\nBUY to cover (close short) at Ask ₹${askPrice.toFixed(2)}?`, 'Cover Short', '#38a169');
+        const proceed = await showConfirm(`You have an open SHORT on ${selectedScript.code}.\nBUY to cover (close short) at live price ₹${buyPrice.toFixed(2)}?`, 'Cover Short', '#38a169');
         if (proceed) {
-          closeVirtualPosition(openShort.id, askPrice, 'MANUAL');
+          closeVirtualPosition(openShort.id, buyPrice, 'MANUAL');
         }
         return;
       }
@@ -2196,12 +2206,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Show order dialog
-      const params = await showOrderDialog('BUY', askPrice);
+      const params = await showOrderDialog('BUY', buyPrice);
       if (!params) return;
       const { qty, orderType, stopLoss, target } = params;
+      const executionPrice = Number.isFinite(parseFloat(params.price)) && parseFloat(params.price) > 0 ? parseFloat(params.price) : buyPrice;
 
       // Calculate margin (MIS = 20% of full value, NRML = 100%)
-      const fullValue = askPrice * qty;
+      const fullValue = executionPrice * qty;
       const marginRequired = orderType === 'MIS' ? fullValue * 0.20 : fullValue;
 
       if (marginRequired > activePlatformUser.walletBalance) {
@@ -2222,8 +2233,8 @@ document.addEventListener('DOMContentLoaded', () => {
         token: selectedScript.token,
         side: 'BUY',
         orderType,
-        entryPrice: askPrice,
-        buyPrice: askPrice, // backward compat
+        entryPrice: executionPrice,
+        buyPrice: executionPrice, // backward compat
         quantity: qty,
         fullTradeValue: fullValue,
         marginPaid: marginRequired,
@@ -2243,7 +2254,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       logTransaction('TRADE_BUY', -marginRequired);
-      showToast(`BUY order placed!\n${selectedScript.code} LONG ${qty} units @ ₹${askPrice.toFixed(2)}`, 'success');
+      showToast(`BUY order placed!\n${selectedScript.code} LONG ${qty} units @ ₹${executionPrice.toFixed(2)}`, 'success');
       
       updateHeaderBalance();
       fetchPositions();
@@ -2255,17 +2266,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!activePlatformUser) { showToast('Please log in to place trades!', 'warning'); return; }
 
       const latestClickQuote = getLatestQuoteForSelectedScript() || q;
-      const { bidPrice } = getQuoteSidePrices(latestClickQuote);
+      const sellPrice = getQuoteTradePrice(latestClickQuote);
 
-      if (isNaN(bidPrice) || bidPrice <= 0) { showToast('Wait for live quotes to load before selling!', 'warning'); return; }
+      if (isNaN(sellPrice) || sellPrice <= 0) { showToast('Wait for live quotes to load before selling!', 'warning'); return; }
 
       // Check if there's an open LONG position → close it (Squareoff)
       const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
       const openLong = positions.find(p => p.userEmail === activePlatformUser.email && p.symbol === selectedScript.code && p.status === 'OPEN' && (p.side || 'BUY') === 'BUY');
       if (openLong) {
-        const proceed = await showConfirm(`You have an open LONG on ${selectedScript.code}.\nSELL to squareoff at Bid ₹${bidPrice.toFixed(2)}?`, 'Squareoff Long', '#e53e3e');
+        const proceed = await showConfirm(`You have an open LONG on ${selectedScript.code}.\nSELL to squareoff at live price ₹${sellPrice.toFixed(2)}?`, 'Squareoff Long', '#e53e3e');
         if (proceed) {
-          closeVirtualPosition(openLong.id, bidPrice, 'MANUAL');
+          closeVirtualPosition(openLong.id, sellPrice, 'MANUAL');
         }
         return;
       }
@@ -2280,11 +2291,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Show order dialog
-      const params = await showOrderDialog('SELL', bidPrice);
+      const params = await showOrderDialog('SELL', sellPrice);
       if (!params) return;
       const { qty, orderType, stopLoss, target } = params;
+      const executionPrice = Number.isFinite(parseFloat(params.price)) && parseFloat(params.price) > 0 ? parseFloat(params.price) : sellPrice;
 
-      const fullValue = bidPrice * qty;
+      const fullValue = executionPrice * qty;
       const marginRequired = orderType === 'MIS' ? fullValue * 0.20 : fullValue;
 
       if (marginRequired > activePlatformUser.walletBalance) {
@@ -2305,8 +2317,8 @@ document.addEventListener('DOMContentLoaded', () => {
         token: selectedScript.token,
         side: 'SELL',
         orderType,
-        entryPrice: bidPrice,
-        buyPrice: bidPrice, // backward compat
+        entryPrice: executionPrice,
+        buyPrice: executionPrice, // backward compat
         quantity: qty,
         fullTradeValue: fullValue,
         marginPaid: marginRequired,
@@ -2326,7 +2338,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       logTransaction('TRADE_SELL_SHORT', -marginRequired);
-      showToast(`SELL SHORT order placed!\n${selectedScript.code} SHORT ${qty} units @ ₹${bidPrice.toFixed(2)}`, 'success');
+      showToast(`SELL SHORT order placed!\n${selectedScript.code} SHORT ${qty} units @ ₹${executionPrice.toFixed(2)}`, 'success');
       
       updateHeaderBalance();
       fetchPositions();
@@ -2454,16 +2466,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const qtyInput = document.getElementById('order-qty-input');
     const marginEst = document.getElementById('order-modal-margin-est');
     
-    const actionBadge = document.getElementById('order-modal-action-badge');
-    const side = actionBadge.textContent.toUpperCase();
-
-    const ltp = parseFloat(quote.ltp);
-    let price = ltp;
-    if (side === 'BUY') {
-      price = quote.depth && quote.depth.sell && quote.depth.sell.length > 0 ? parseFloat(quote.depth.sell[0].price) : ltp;
-    } else {
-      price = quote.depth && quote.depth.buy && quote.depth.buy.length > 0 ? parseFloat(quote.depth.buy[0].price) : ltp;
-    }
+    const price = getQuoteTradePrice(quote);
+    if (isNaN(price) || price <= 0) return;
 
     priceEl.textContent = `₹${price.toFixed(2)}`;
 
