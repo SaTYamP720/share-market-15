@@ -1,9 +1,9 @@
 config:
   target: "http://localhost:3000"
   phases:
-    - duration: 15
-      arrivalRate: 5
-      name: Warm up
+    - duration: 30
+      arrivalRate: 15
+      name: "Simulate 450 concurrent users"
   engines:
     socketio: {}
 scenarios:

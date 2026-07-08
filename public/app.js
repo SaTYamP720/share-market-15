@@ -2083,8 +2083,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const priceEl = document.getElementById('order-modal-price');
         const qtyInput = document.getElementById('order-qty-input');
         const lotsizeHelp = document.getElementById('order-modal-lotsize-help');
-        const slInput = document.getElementById('order-sl-input');
-        const targetInput = document.getElementById('order-target-input');
         const marginEst = document.getElementById('order-modal-margin-est');
         const walletBal = document.getElementById('order-modal-wallet-bal');
         const confirmBtn = document.getElementById('confirm-order-btn');
@@ -2104,9 +2102,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         qtyInput.value = defaultQty;
         lotsizeHelp.textContent = `Min lot size: ${defaultQty}`;
-        
-        slInput.value = '';
-        targetInput.value = '';
         
         walletBal.textContent = `₹${activePlatformUser.walletBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
         
@@ -2144,40 +2139,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         qtyInput.oninput = updateCalculations;
 
-        // Mutually exclusive SL/Target input handling
-        slInput.disabled = false;
-        slInput.style.opacity = '1';
-        slInput.style.cursor = 'auto';
-        targetInput.disabled = false;
-        targetInput.style.opacity = '1';
-        targetInput.style.cursor = 'auto';
-
-        slInput.oninput = () => {
-          if (slInput.value) {
-            targetInput.value = '';
-            targetInput.disabled = true;
-            targetInput.style.opacity = '0.5';
-            targetInput.style.cursor = 'not-allowed';
-          } else {
-            targetInput.disabled = false;
-            targetInput.style.opacity = '1';
-            targetInput.style.cursor = 'auto';
-          }
-        };
-
-        targetInput.oninput = () => {
-          if (targetInput.value) {
-            slInput.value = '';
-            slInput.disabled = true;
-            slInput.style.opacity = '0.5';
-            slInput.style.cursor = 'not-allowed';
-          } else {
-            slInput.disabled = false;
-            slInput.style.opacity = '1';
-            slInput.style.cursor = 'auto';
-          }
-        };
-        
         // Initialize global reference
         window.currentOrderModalPrice = price;
         updateCalculations();
@@ -2196,8 +2157,6 @@ document.addEventListener('DOMContentLoaded', () => {
           confirmBtn.onclick = null;
           closeBtn.onclick = null;
           qtyInput.oninput = null;
-          slInput.oninput = null;
-          targetInput.oninput = null;
           tabMis.onclick = null;
           tabNrml.onclick = null;
           window.currentOrderModalPrice = null;
@@ -2210,17 +2169,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         confirmBtn.onclick = () => {
           const qty = parseInt(qtyInput.value);
-          const stopLoss = slInput.value ? parseFloat(slInput.value) : null;
-          const target = targetInput.value ? parseFloat(targetInput.value) : null;
+          const stopLoss = null; // No SL when placing order from watchlist
+          const target = null;   // No Target when placing order from watchlist
           const finalPrice = window.currentOrderModalPrice || price;
 
           if (isNaN(qty) || qty <= 0) {
             showToast('Please enter a valid positive quantity.', 'error');
-            return;
-          }
-
-          if (stopLoss !== null && target !== null) {
-            showToast('Please set either Stop-Loss or Target, not both together.', 'warning');
             return;
           }
 
