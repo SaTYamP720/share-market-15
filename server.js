@@ -168,6 +168,30 @@ function getExchangeTypeInt(exchangeStr) {
 
   return 1;
 }
+function getWsPriceDivisor(exchangeType) {
+  const exchType = parseInt(exchangeType, 10);
+  if (exchType === 13) return 10000; // CDS currency ticks
+  if (exchType === 5) return 1000;   // MCX ticks are one decimal place larger in SmartAPI WS
+  return 100;
+}
+
+function scaleRestPriceForDisplay(exchange, value) {
+  const parsed = parseFloat(value || 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return getExchangeTypeInt(exchange) === 5 ? parsed / 10 : parsed;
+}
+
+function scaleRestDepthForDisplay(exchange, depth) {
+  if (!depth) return depth;
+  const scaleSide = (side) => Array.isArray(side)
+    ? side.map(level => ({ ...level, price: scaleRestPriceForDisplay(exchange, level.price) }))
+    : side;
+  return {
+    ...depth,
+    buy: scaleSide(depth.buy),
+    sell: scaleSide(depth.sell)
+  };
+}
 
 async function initAngelOneWebSocket() {
   if (!activeSession.smartConnectInstance || !activeSession.smartConnectInstance.generateSession) {
@@ -209,10 +233,8 @@ async function initAngelOneWebSocket() {
       const tokenKey = `${tickData.exchange_type}:${cleanToken}`;
       
       const exchType = parseInt(tickData.exchange_type);
-      // Angel One WebSocket sends all prices as scaled integers:
-      // - CDS (Currency, exchType=13) is multiplied by 10000
-      // - All others (NSE, BSE, NFO, MCX, etc.) multiplied by 100
-      const divisor = exchType === 13 ? 10000 : 100;
+      // Angel One WebSocket sends prices as scaled integers. MCX needs one extra decimal place.
+      const divisor = getWsPriceDivisor(exchType);
 
       const scale = (raw) => raw ? parseFloat(raw) / divisor : null;
 
@@ -513,8 +535,8 @@ app.get('/api/market-data', requireAuth, async (req, res) => {
     if (response.status && response.data && response.data.fetched && response.data.fetched.length > 0) {
       const info = response.data.fetched[0];
       
-      const ltp = parseFloat(info.ltp || 0);
-      const close = parseFloat(info.close || info.prevClose || 0);
+      const ltp = scaleRestPriceForDisplay(exchange, info.ltp);
+      const close = scaleRestPriceForDisplay(exchange, info.close || info.prevClose);
       const change = ltp - close;
       const pctChange = close > 0 ? (change / close) * 100 : 0;
 
@@ -524,11 +546,11 @@ app.get('/api/market-data', requireAuth, async (req, res) => {
           exchange: exchange,
           symbolToken: token,
           ltp: ltp.toFixed(2),
-          open: parseFloat(info.open || 0).toFixed(2),
-          high: parseFloat(info.high || 0).toFixed(2),
-          low: parseFloat(info.low || 0).toFixed(2),
+          open: scaleRestPriceForDisplay(exchange, info.open).toFixed(2),
+          high: scaleRestPriceForDisplay(exchange, info.high).toFixed(2),
+          low: scaleRestPriceForDisplay(exchange, info.low).toFixed(2),
           close: close.toFixed(2),
-          depth: info.depth || {
+          depth: scaleRestDepthForDisplay(exchange, info.depth) || {
             buy: [{ price: (ltp - 0.2).toFixed(2), quantity: 100 }],
             sell: [{ price: (ltp + 0.2).toFixed(2), quantity: 100 }]
           },
@@ -603,8 +625,8 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
       const results = scripts.map(s => {
         const info = response.data.fetched.find(item => item.symbolToken === s.token && item.exchange === s.exchange) || {};
         
-        const ltp = parseFloat(info.ltp || 0);
-        const close = parseFloat(info.close || 0);
+        const ltp = scaleRestPriceForDisplay(s.exchange, info.ltp);
+        const close = scaleRestPriceForDisplay(s.exchange, info.close);
         const change = ltp - close;
         const pctChange = close > 0 ? (change / close) * 100 : 0;
 
@@ -612,11 +634,11 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
           exchange: s.exchange,
           symbolToken: s.token,
           ltp: ltp.toFixed(2),
-          open: parseFloat(info.open || 0).toFixed(2),
-          high: parseFloat(info.high || 0).toFixed(2),
-          low: parseFloat(info.low || 0).toFixed(2),
+          open: scaleRestPriceForDisplay(s.exchange, info.open).toFixed(2),
+          high: scaleRestPriceForDisplay(s.exchange, info.high).toFixed(2),
+          low: scaleRestPriceForDisplay(s.exchange, info.low).toFixed(2),
           close: close.toFixed(2),
-          depth: info.depth || {
+          depth: scaleRestDepthForDisplay(s.exchange, info.depth) || {
             buy: [{ price: (ltp - 0.2).toFixed(2), quantity: 100 }],
             sell: [{ price: (ltp + 0.2).toFixed(2), quantity: 100 }]
           },
