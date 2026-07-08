@@ -2141,15 +2141,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function isMarketOpen(exchange) {
     try {
-      const options = { timeZone: 'Asia/Kolkata', hour12: false, weekday: 'short', hour: '2-digit', minute: '2-digit' };
-      const formatter = new Intl.DateTimeFormat('en-US', options);
-      const formatted = formatter.format(new Date()); 
-      
-      const parts = formatted.split(', ');
-      const weekday = parts[0];
-      const timeParts = parts[1].split(':');
-      const hours = parseInt(timeParts[0]);
-      const minutes = parseInt(timeParts[1]);
+      // Use formatToParts() for reliable field access regardless of locale/browser
+      const now = new Date();
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour12: false,
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).formatToParts(now);
+
+      const get = (type) => (parts.find(p => p.type === type) || {}).value || '';
+      const weekday = get('weekday');
+      const hours = parseInt(get('hour'), 10);
+      const minutes = parseInt(get('minute'), 10);
       const totalMinutes = hours * 60 + minutes;
 
       if (weekday === 'Sat' || weekday === 'Sun') {
@@ -2158,25 +2163,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const ex = (exchange || 'NSE').toUpperCase();
       if (ex === 'MCX') {
-        const mcxStart = 9 * 60; // 09:00
-        const mcxEnd = 23 * 60 + 30; // 23:30
-        if (totalMinutes >= mcxStart && totalMinutes <= mcxEnd) {
-          return { open: true };
-        } else {
-          return { open: false, reason: 'MCX Market hours are 9:00 AM to 11:30 PM IST.' };
-        }
+        const mcxStart = 9 * 60;       // 09:00 AM
+        const mcxEnd   = 23 * 60 + 30; // 11:30 PM
+        return (totalMinutes >= mcxStart && totalMinutes <= mcxEnd)
+          ? { open: true }
+          : { open: false, reason: 'MCX Market hours are 9:00 AM to 11:30 PM IST.' };
       } else {
-        const nseStart = 9 * 60 + 15; // 09:15
-        const nseEnd = 15 * 60 + 30; // 15:30
-        if (totalMinutes >= nseStart && totalMinutes <= nseEnd) {
-          return { open: true };
-        } else {
-          return { open: false, reason: 'NSE Market hours are 9:15 AM to 3:30 PM IST.' };
-        }
+        const nseStart = 9 * 60 + 15;  // 09:15 AM
+        const nseEnd   = 15 * 60 + 30; // 03:30 PM
+        return (totalMinutes >= nseStart && totalMinutes <= nseEnd)
+          ? { open: true }
+          : { open: false, reason: 'NSE Market hours are 9:15 AM to 3:30 PM IST.' };
       }
     } catch (e) {
-      console.error(e);
-      return { open: true }; // Safe fallback
+      console.error('[isMarketOpen] Error:', e.message);
+      return { open: true }; // Safe fallback — assume open
     }
   }
 
