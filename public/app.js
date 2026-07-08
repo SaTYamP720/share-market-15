@@ -1600,23 +1600,31 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchQuoteForScript(script) {
     // Only skip if we have a FULL quote (one with open/high/low, not just a WS LTP stub)
     if (script.quote && script.quote.open !== undefined) return;
-    if (!apiConnected) return; // Don't attempt fetch if not connected
+    if (!apiConnected) {
+      console.warn('[Quote] Skipping fetch for', script.code, '— apiConnected is false');
+      return;
+    }
     try {
-      const response = await fetch(`/api/market-data?exchange=${script.exchange}&token=${script.token}`);
+      const url = `/api/market-data?exchange=${script.exchange}&token=${script.token}`;
+      console.log('[Quote] Fetching:', url);
+      const response = await fetch(url);
       const result = await response.json();
+      console.log('[Quote] Response for', script.code, ':', JSON.stringify(result).substring(0, 200));
       if (result.success && result.data) {
-        // Merge WS live LTP into the REST quote so it doesn't overwrite real-time price
         const wsLtp = getLtpFromWS(script.exchange, script.token);
         result.data.ltp = wsLtp !== null ? wsLtp : result.data.ltp;
         script.quote = result.data;
+        console.log('[Quote] Set quote for', script.code, '| LTP:', result.data.ltp, '| Bid:', result.data.depth?.buy?.[0]?.price, '| Ask:', result.data.depth?.sell?.[0]?.price);
         renderWatchlistTable();
         if (selectedScript && selectedScript.code === script.code) {
           selectedScript = script;
           renderDetailsPanel();
         }
+      } else {
+        console.error('[Quote] Failed for', script.code, ':', result.error || result.message);
       }
     } catch (e) {
-      console.error("Error fetching market data for " + script.code, e);
+      console.error('[Quote] Exception for ' + script.code + ':', e.message);
     }
   }
 
