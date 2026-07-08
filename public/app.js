@@ -25,8 +25,11 @@ function mergeWsQuote(key, quote) {
 
 
 function formatPricePlain(value) {
-  const parsed = parseFloat(value);
-  return Number.isFinite(parsed) ? parsed.toFixed(2) : '--';
+  if (value === undefined || value === null || value === '--') return '--';
+  const text = String(value).trim().replace(/,/g, '');
+  const parsed = Number(text);
+  if (!Number.isFinite(parsed)) return '--';
+  return text.includes('.') ? text : parsed.toFixed(2);
 }
 
 function createQuoteFromWs(liveQuote) {
@@ -1712,6 +1715,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // Safe depth access
       const bidPrice = q.depth && q.depth.buy && q.depth.buy[0] ? q.depth.buy[0].price : '--';
       const askPrice = q.depth && q.depth.sell && q.depth.sell[0] ? q.depth.sell[0].price : '--';
+      const formattedBid = formatPricePlain(bidPrice);
+      const formattedAsk = formatPricePlain(askPrice);
+      const formattedHigh = formatPricePlain(q.high);
+      const formattedLow = formatPricePlain(q.low);
+      const formattedOpen = formatPricePlain(q.open);
+      const formattedClose = formatPricePlain(q.close);
 
       const tr = document.createElement('tr');
       tr.style.cursor = 'pointer';
@@ -1731,16 +1740,16 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="font-size: 10px; color: #a0aec0; font-weight: normal; margin-top: 2px;">${script.name}</div>
         </td>
         <td><span class="watchlist-pill" style="font-size: 9px; padding: 2px 6px;">${script.exchange}</span></td>
-        <td style="color: #38a169; font-weight: 500;" data-bid-key="${wsKeyForRow}">${bidPrice}</td>
-        <td style="color: #e53e3e; font-weight: 500;" data-ask-key="${wsKeyForRow}">${askPrice}</td>
+        <td style="color: #38a169; font-weight: 500;" data-bid-key="${wsKeyForRow}">${formattedBid}</td>
+        <td style="color: #e53e3e; font-weight: 500;" data-ask-key="${wsKeyForRow}">${formattedAsk}</td>
         <td style="color: ${changeColor}; font-size: 11px; font-weight: 500;">
           <div>${changeSign}${q.netChange}</div>
           <div style="font-size: 9px; margin-top: 2px;">${changeSign}${q.percentChange}%</div>
         </td>
-        <td>${q.high || '--'}</td>
-        <td>${q.low || '--'}</td>
-        <td>${q.open || '--'}</td>
-        <td>${q.close || '--'}</td>
+        <td>${formattedHigh}</td>
+        <td>${formattedLow}</td>
+        <td>${formattedOpen}</td>
+        <td>${formattedClose}</td>
         <td class="bold" style="color: ${changeColor};" data-ltp-key="${wsKeyForRow}">${formattedLtp}</td>
         <td style="text-align: center; vertical-align: middle; padding: 0 10px;">
           <button class="btn-delete-watchlist" data-code="${script.code}" style="background: none; border: none; padding: 4px; cursor: pointer; color: #a0aec0; transition: color 0.2s; display: flex; align-items: center; justify-content: center;">
