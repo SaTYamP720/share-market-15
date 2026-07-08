@@ -794,6 +794,62 @@ document.addEventListener('DOMContentLoaded', () => {
     return NaN;
   }
 
+  function updateDetailsPanelLive(q) {
+    if (!selectedScript) return;
+    const container = document.querySelector('.instrument-details-active');
+    if (!container) return;
+
+    const isPositive = parseFloat(q.netChange) >= 0;
+    const color = isPositive ? '#38a169' : '#e53e3e';
+    const sign = isPositive ? '+' : '';
+
+    const fmtVal = (v) => v === undefined || v === null || v === '--' ? '--' : formatPricePlain(v);
+
+    // 1. Update LTP
+    const ltpEl = container.querySelector('div[style*="font-size: 26px"]');
+    if (ltpEl) {
+      ltpEl.textContent = fmtVal(q.ltp);
+      ltpEl.style.color = color;
+    }
+
+    // 2. Update Net Change / Pct Change
+    if (ltpEl) {
+      const changeEl = ltpEl.nextElementSibling;
+      if (changeEl) {
+        changeEl.textContent = `${sign}${fmtVal(q.netChange)} (${sign}${fmtVal(q.percentChange)}%)`;
+        changeEl.style.color = color;
+      }
+    }
+
+    // 3. Update Bid / Ask values
+    const rawBid = q.depth && q.depth.buy && q.depth.buy[0] ? parseFloat(q.depth.buy[0].price) : 0;
+    const rawAsk = q.depth && q.depth.sell && q.depth.sell[0] ? parseFloat(q.depth.sell[0].price) : 0;
+    const bidVal = rawBid > 0 ? rawBid : (parseFloat(q.ltp) || 0);
+    const askVal = rawAsk > 0 ? rawAsk : (parseFloat(q.ltp) || 0);
+
+    const bidSpan = container.querySelector('span[style*="color: #38a169"]');
+    if (bidSpan) bidSpan.textContent = `₹${bidVal.toFixed(2)}`;
+
+    const askSpan = container.querySelector('span[style*="color: #e53e3e"]');
+    if (askSpan) askSpan.textContent = `₹${askVal.toFixed(2)}`;
+
+    // 4. Update BUY / SELL button labels
+    const sellBtnSpan = container.querySelector('.btn-sell-action span');
+    if (sellBtnSpan) sellBtnSpan.textContent = `₹${bidVal.toFixed(2)}`;
+
+    const buyBtnSpan = container.querySelector('.btn-buy-action span');
+    if (buyBtnSpan) buyBtnSpan.textContent = `@ ₹${askVal.toFixed(2)}`;
+
+    // 5. Update OHLC Grid
+    const ohlcDivs = container.querySelectorAll('div[style*="display: grid"] > div > div:last-child');
+    if (ohlcDivs.length === 4) {
+      ohlcDivs[0].textContent = fmtVal(q.open);
+      ohlcDivs[1].textContent = fmtVal(q.high);
+      ohlcDivs[2].textContent = fmtVal(q.low);
+      ohlcDivs[3].textContent = fmtVal(q.close);
+    }
+  }
+
   let selectedDetailsFrame = null;
   window._refreshSelectedDetailsFromTick = (key, liveQuote) => {
     if (!selectedScript) return;
@@ -809,7 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
       selectedDetailsFrame = null;
       const latestQuote = getLatestQuoteForSelectedScript();
       if (!latestQuote) return;
-      renderDetailsPanel();
+      updateDetailsPanelLive(latestQuote);
       updateOrderModalLiveQuote(latestQuote);
     });
   };
