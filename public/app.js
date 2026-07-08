@@ -109,6 +109,10 @@ socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange
       }
     });
   }
+
+  if (typeof window._refreshSelectedDetailsFromTick === 'function') {
+    window._refreshSelectedDetailsFromTick(key, liveQuote);
+  }
 });
 
 
@@ -769,6 +773,26 @@ document.addEventListener('DOMContentLoaded', () => {
       : ltp;
     return { ltp, bidPrice, askPrice };
   }
+
+  let selectedDetailsFrame = null;
+  window._refreshSelectedDetailsFromTick = (key, liveQuote) => {
+    if (!selectedScript) return;
+    if (getWsKey(selectedScript.exchange, selectedScript.token) !== key) return;
+
+    if (liveQuote) {
+      if (!selectedScript.quote) selectedScript.quote = createQuoteFromWs(liveQuote);
+      else patchQuoteFromWs(selectedScript.quote, liveQuote);
+    }
+
+    if (selectedDetailsFrame) return;
+    selectedDetailsFrame = requestAnimationFrame(() => {
+      selectedDetailsFrame = null;
+      const latestQuote = getLatestQuoteForSelectedScript();
+      if (!latestQuote) return;
+      renderDetailsPanel();
+      updateOrderModalLiveQuote(latestQuote);
+    });
+  };
 
   // Helper: get LTP for a script from wsLivePrices (accessible from any function in scope)
   // Supports both short exchange names (NSE, MCX) and exch_seg names (nse_cm, mcx_fo)
