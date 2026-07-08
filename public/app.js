@@ -2007,10 +2007,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Buy / Sell Action buttons -->
         <div style="display: flex; gap: 12px; margin-top: 10px;">
           <button class="btn btn-sell-action" style="flex: 1; height: 42px; background-color: #fff5f5; border: 1px solid #e53e3e; border-radius: 8px; color: #e53e3e; font-weight: 700; cursor: pointer; transition: all 0.2s;">
-            SELL <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">₹${displayActionPrice.toFixed(2)}</span>
+            SELL <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">₹${bidVal.toFixed(2)}</span>
           </button>
           <button class="btn btn-buy-action" style="flex: 1; height: 42px; background-color: #e6fffa; border: 1px solid #38a169; border-radius: 8px; color: #38a169; font-weight: 700; cursor: pointer; transition: all 0.2s;">
-            BUY <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">@ ₹${displayActionPrice.toFixed(2)}</span>
+            BUY <span style="display:block; font-size:11px; font-weight:500; margin-top:2px;">@ ₹${askVal.toFixed(2)}</span>
           </button>
         </div>
       </div>
@@ -2199,7 +2199,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!activePlatformUser) { showToast('Please log in to place trades!', 'warning'); return; }
 
       const latestClickQuote = getLatestQuoteForSelectedScript() || q;
-      const buyPrice = getQuoteTradePrice(latestClickQuote);
+      const rawAsk = latestClickQuote.depth && latestClickQuote.depth.sell && latestClickQuote.depth.sell[0] ? parseFloat(latestClickQuote.depth.sell[0].price) : 0;
+      const buyPrice = rawAsk > 0 ? rawAsk : getQuoteTradePrice(latestClickQuote);
 
       if (isNaN(buyPrice) || buyPrice <= 0) { showToast('Wait for live quotes to load before buying!', 'warning'); return; }
 
@@ -2284,7 +2285,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!activePlatformUser) { showToast('Please log in to place trades!', 'warning'); return; }
 
       const latestClickQuote = getLatestQuoteForSelectedScript() || q;
-      const sellPrice = getQuoteTradePrice(latestClickQuote);
+      const rawBid = latestClickQuote.depth && latestClickQuote.depth.buy && latestClickQuote.depth.buy[0] ? parseFloat(latestClickQuote.depth.buy[0].price) : 0;
+      const sellPrice = rawBid > 0 ? rawBid : getQuoteTradePrice(latestClickQuote);
 
       if (isNaN(sellPrice) || sellPrice <= 0) { showToast('Wait for live quotes to load before selling!', 'warning'); return; }
 
