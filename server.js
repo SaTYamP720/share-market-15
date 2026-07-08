@@ -171,14 +171,13 @@ function getExchangeTypeInt(exchangeStr) {
 function getWsPriceDivisor(exchangeType) {
   const exchType = parseInt(exchangeType, 10);
   if (exchType === 13) return 10000; // CDS currency ticks
-  if (exchType === 5) return 1000;   // MCX ticks are one decimal place larger in SmartAPI WS
   return 100;
 }
 
 function scaleRestPriceForDisplay(exchange, value) {
   const parsed = parseFloat(value || 0);
   if (!Number.isFinite(parsed)) return 0;
-  return getExchangeTypeInt(exchange) === 5 ? parsed / 10 : parsed;
+  return parsed;
 }
 
 function scaleRestDepthForDisplay(exchange, depth) {
@@ -233,7 +232,7 @@ async function initAngelOneWebSocket() {
       const tokenKey = `${tickData.exchange_type}:${cleanToken}`;
       
       const exchType = parseInt(tickData.exchange_type);
-      // Angel One WebSocket sends prices as scaled integers. MCX needs one extra decimal place.
+      // Angel One WebSocket sends prices as scaled integers; keep SmartAPI scale direct.
       const divisor = getWsPriceDivisor(exchType);
 
       const scale = (raw) => raw ? parseFloat(raw) / divisor : null;
@@ -496,30 +495,7 @@ app.get('/api/market-data', requireAuth, async (req, res) => {
 
   // Local test mode bypass — only if there is absolutely no real session available
   if (!sessionToUse.smartConnectInstance || !sessionToUse.smartConnectInstance.generateSession) {
-    const seed = parseInt(token) || 5000;
-    const ltp = (seed % 900) + 100 + (Math.random() * 5);
-    const prevClose = ltp - (Math.random() * 6 - 3);
-    const change = ltp - prevClose;
-    const pctChange = (change / prevClose) * 100;
-    
-    return res.json({
-      success: true,
-      data: {
-        exchange: exchange,
-        symbolToken: token,
-        ltp: ltp.toFixed(2),
-        open: (ltp * 0.99).toFixed(2),
-        high: (ltp * 1.02).toFixed(2),
-        low: (ltp * 0.98).toFixed(2),
-        close: prevClose.toFixed(2),
-        depth: {
-          buy: [{ price: (ltp - 0.5).toFixed(2), quantity: 150 }],
-          sell: [{ price: (ltp + 0.5).toFixed(2), quantity: 200 }]
-        },
-        netChange: change.toFixed(2),
-        percentChange: pctChange.toFixed(2)
-      }
-    });
+    return res.status(503).json({ success: false, message: 'Angel One session unavailable. Live prices cannot be fetched.' });
   }
 
   try {
@@ -550,10 +526,7 @@ app.get('/api/market-data', requireAuth, async (req, res) => {
           high: scaleRestPriceForDisplay(exchange, info.high).toFixed(2),
           low: scaleRestPriceForDisplay(exchange, info.low).toFixed(2),
           close: close.toFixed(2),
-          depth: scaleRestDepthForDisplay(exchange, info.depth) || {
-            buy: [{ price: (ltp - 0.2).toFixed(2), quantity: 100 }],
-            sell: [{ price: (ltp + 0.2).toFixed(2), quantity: 100 }]
-          },
+          depth: scaleRestDepthForDisplay(exchange, info.depth) || { buy: [], sell: [] },
           netChange: change.toFixed(2),
           percentChange: pctChange.toFixed(2)
         }
@@ -582,30 +555,7 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
                       : activeSession;
 
   if (!sessionToUse.smartConnectInstance || !sessionToUse.smartConnectInstance.generateSession) {
-    // If no real session is available, return mock batch data
-    const mockResults = scripts.map(s => {
-      const seed = parseInt(s.token) || 5000;
-      const ltp = (seed % 900) + 100 + (Math.random() * 5);
-      const prevClose = ltp - (Math.random() * 6 - 3);
-      const change = ltp - prevClose;
-      const pctChange = (change / prevClose) * 100;
-      return {
-        exchange: s.exchange,
-        symbolToken: s.token,
-        ltp: ltp.toFixed(2),
-        open: (ltp * 0.99).toFixed(2),
-        high: (ltp * 1.02).toFixed(2),
-        low: (ltp * 0.98).toFixed(2),
-        close: prevClose.toFixed(2),
-        depth: {
-          buy: [{ price: (ltp - 0.5).toFixed(2), quantity: 150 }],
-          sell: [{ price: (ltp + 0.5).toFixed(2), quantity: 200 }]
-        },
-        netChange: change.toFixed(2),
-        percentChange: pctChange.toFixed(2)
-      };
-    });
-    return res.json({ success: true, data: mockResults });
+    return res.status(503).json({ success: false, message: 'Angel One session unavailable. Live prices cannot be fetched.' });
   }
 
   try {
@@ -638,10 +588,7 @@ app.post('/api/market-data-batch', requireAuth, async (req, res) => {
           high: scaleRestPriceForDisplay(s.exchange, info.high).toFixed(2),
           low: scaleRestPriceForDisplay(s.exchange, info.low).toFixed(2),
           close: close.toFixed(2),
-          depth: scaleRestDepthForDisplay(s.exchange, info.depth) || {
-            buy: [{ price: (ltp - 0.2).toFixed(2), quantity: 100 }],
-            sell: [{ price: (ltp + 0.2).toFixed(2), quantity: 100 }]
-          },
+          depth: scaleRestDepthForDisplay(s.exchange, info.depth) || { buy: [], sell: [] },
           netChange: change.toFixed(2),
           percentChange: pctChange.toFixed(2)
         };
