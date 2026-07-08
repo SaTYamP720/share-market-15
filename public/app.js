@@ -16,7 +16,16 @@ function mergeWsQuote(key, quote) {
   const next = normaliseWsQuote(quote);
   if (!next) return null;
   const prev = wsLiveQuotes[key] || {};
-  wsLiveQuotes[key] = { ...prev, ...next };
+  
+  // Merge only non-null and non-undefined values
+  const merged = { ...prev };
+  Object.keys(next).forEach(k => {
+    if (next[k] !== null && next[k] !== undefined) {
+      merged[k] = next[k];
+    }
+  });
+
+  wsLiveQuotes[key] = merged;
   if (wsLiveQuotes[key].ltp !== undefined && wsLiveQuotes[key].ltp !== null) {
     wsLivePrices[key] = wsLiveQuotes[key].ltp;
   }

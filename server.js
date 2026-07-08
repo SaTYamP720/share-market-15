@@ -256,15 +256,38 @@ async function initAngelOneWebSocket() {
 
       console.log(`[AngelWS] Tick | Token: ${cleanToken} | LTP: ${ltp} | Bid: ${bid} | Ask: ${ask} | Open: ${open} | Close: ${close}`);
 
-      priceCache.set(tokenKey, {
-        ltp, bid, ask, open, high, low, close, netChange, pctChange,
+      const prev = priceCache.get(tokenKey) || {};
+      const updated = {
         token: cleanToken,
         exchangeType: tickData.exchange_type,
         ts: Date.now()
-      });
+      };
 
-      // Broadcast ALL fields to all browser clients in one event
-      io.emit('price_tick', { key: tokenKey, ltp, bid, ask, open, high, low, close, netChange, pctChange, token: cleanToken });
+      // Always update LTP
+      updated.ltp = ltp || prev.ltp || 0;
+
+      // Merge only non-null/non-undefined values
+      if (open !== null && open !== undefined) updated.open = open; else if (prev.open !== undefined) updated.open = prev.open;
+      if (high !== null && high !== undefined) updated.high = high; else if (prev.high !== undefined) updated.high = prev.high;
+      if (low !== null && low !== undefined) updated.low = low; else if (prev.low !== undefined) updated.low = prev.low;
+      if (close !== null && close !== undefined) updated.close = close; else if (prev.close !== undefined) updated.close = prev.close;
+      if (bid !== null && bid !== undefined) updated.bid = bid; else if (prev.bid !== undefined) updated.bid = prev.bid;
+      if (ask !== null && ask !== undefined) updated.ask = ask; else if (prev.ask !== undefined) updated.ask = prev.ask;
+
+      // Calculate netChange and pctChange based on current LTP and CLOSE
+      const effectiveClose = updated.close || 0;
+      if (effectiveClose > 0 && updated.ltp > 0) {
+        updated.netChange = parseFloat((updated.ltp - effectiveClose).toFixed(2));
+        updated.pctChange = parseFloat(((updated.ltp - effectiveClose) / effectiveClose * 100).toFixed(2));
+      } else {
+        updated.netChange = netChange !== null && netChange !== undefined ? netChange : prev.netChange;
+        updated.pctChange = pctChange !== null && pctChange !== undefined ? pctChange : prev.pctChange;
+      }
+
+      priceCache.set(tokenKey, updated);
+
+      // Broadcast ALL merged fields to all browser clients in one event
+      io.emit('price_tick', { key: tokenKey, ...updated });
     });
 
 

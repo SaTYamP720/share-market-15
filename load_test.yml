@@ -1,0 +1,21 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 15
+      arrivalRate: 5
+      name: Warm up
+  engines:
+    socketio: {}
+scenarios:
+  - name: "Simulate User Watchlist Activity"
+    engine: socketio
+    flow:
+      - emit:
+          channel: "ws_subscribe"
+          data:
+            tokens:
+              - exchange: "NSE"
+                token: "3045" # SBIN
+              - exchange: "MCX"
+                token: "466583" # GOLD05AUG26FUT
+      - think: 10
