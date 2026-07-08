@@ -23,20 +23,70 @@ function mergeWsQuote(key, quote) {
   return wsLiveQuotes[key];
 }
 
+const PRICE_FIELDS = ['ltp', 'bid', 'ask', 'open', 'high', 'low', 'close', 'netChange'];
+
+function normaliseLiveQuoteAgainstBaseline(scriptQuote, liveQuote) {
+  if (!scriptQuote || !liveQuote || liveQuote.ltp === undefined || liveQuote.ltp === null) return liveQuote;
+  const baseline = parseFloat(scriptQuote.ltp);
+  const incoming = parseFloat(liveQuote.ltp);
+  if (!Number.isFinite(baseline) || !Number.isFinite(incoming) || baseline <= 0 || incoming <= 0) return liveQuote;
+
+  const ratio = baseline / incoming;
+  let multiplier = 1;
+  if (ratio > 7 && ratio < 13) multiplier = 10;
+  else if (ratio > 70 && ratio < 130) multiplier = 100;
+  else if (ratio > 700 && ratio < 1300) multiplier = 1000;
+  else if (ratio > 0.07 && ratio < 0.13) multiplier = 0.1;
+  else if (ratio > 0.007 && ratio < 0.013) multiplier = 0.01;
+  else if (ratio > 0.0007 && ratio < 0.0013) multiplier = 0.001;
+  else if (ratio > 3 || ratio < 0.33) {
+    console.warn('[WS] Ignoring outlier tick', { baseline, incoming, ratio, liveQuote });
+    return null;
+  }
+
+  if (multiplier === 1) return liveQuote;
+  const adjusted = { ...liveQuote };
+  PRICE_FIELDS.forEach(field => {
+    if (adjusted[field] !== undefined && adjusted[field] !== null && Number.isFinite(parseFloat(adjusted[field]))) {
+      adjusted[field] = parseFloat((parseFloat(adjusted[field]) * multiplier).toFixed(4));
+    }
+  });
+  console.warn('[WS] Normalized tick scale', { baseline, incoming, multiplier, adjustedLtp: adjusted.ltp });
+  return adjusted;
+}
+
+function createQuoteFromWs(liveQuote) {
+  const quote = {
+    ltp: liveQuote?.ltp ?? '--',
+    netChange: liveQuote?.netChange ?? '--',
+    percentChange: liveQuote?.pctChange ?? '--',
+    open: liveQuote?.open ?? '--',
+    high: liveQuote?.high ?? '--',
+    low: liveQuote?.low ?? '--',
+    close: liveQuote?.close ?? '--',
+    depth: { buy: [{ price: '--' }], sell: [{ price: '--' }] }
+  };
+  patchQuoteFromWs(quote, liveQuote);
+  return quote;
+}
+
 function patchQuoteFromWs(scriptQuote, liveQuote) {
-  if (!scriptQuote || !liveQuote) return;
-  if (liveQuote.ltp !== undefined && liveQuote.ltp !== null) scriptQuote.ltp = liveQuote.ltp;
-  if (liveQuote.open !== undefined && liveQuote.open !== null) scriptQuote.open = liveQuote.open;
-  if (liveQuote.high !== undefined && liveQuote.high !== null) scriptQuote.high = liveQuote.high;
-  if (liveQuote.low !== undefined && liveQuote.low !== null) scriptQuote.low = liveQuote.low;
-  if (liveQuote.close !== undefined && liveQuote.close !== null) scriptQuote.close = liveQuote.close;
-  if (liveQuote.netChange !== undefined && liveQuote.netChange !== null) scriptQuote.netChange = liveQuote.netChange;
-  if (liveQuote.pctChange !== undefined && liveQuote.pctChange !== null) scriptQuote.percentChange = liveQuote.pctChange;
+  if (!scriptQuote || !liveQuote) return false;
+  const adjusted = normaliseLiveQuoteAgainstBaseline(scriptQuote, liveQuote);
+  if (!adjusted) return false;
+  if (adjusted.ltp !== undefined && adjusted.ltp !== null) scriptQuote.ltp = adjusted.ltp;
+  if (adjusted.open !== undefined && adjusted.open !== null) scriptQuote.open = adjusted.open;
+  if (adjusted.high !== undefined && adjusted.high !== null) scriptQuote.high = adjusted.high;
+  if (adjusted.low !== undefined && adjusted.low !== null) scriptQuote.low = adjusted.low;
+  if (adjusted.close !== undefined && adjusted.close !== null) scriptQuote.close = adjusted.close;
+  if (adjusted.netChange !== undefined && adjusted.netChange !== null) scriptQuote.netChange = adjusted.netChange;
+  if (adjusted.pctChange !== undefined && adjusted.pctChange !== null) scriptQuote.percentChange = adjusted.pctChange;
   scriptQuote.depth = scriptQuote.depth || { buy: [], sell: [] };
   scriptQuote.depth.buy = scriptQuote.depth.buy || [];
   scriptQuote.depth.sell = scriptQuote.depth.sell || [];
-  if (liveQuote.bid !== undefined && liveQuote.bid !== null) scriptQuote.depth.buy[0] = { price: liveQuote.bid, quantity: 0, orders: 0 };
-  if (liveQuote.ask !== undefined && liveQuote.ask !== null) scriptQuote.depth.sell[0] = { price: liveQuote.ask, quantity: 0, orders: 0 };
+  if (adjusted.bid !== undefined && adjusted.bid !== null) scriptQuote.depth.buy[0] = { price: adjusted.bid, quantity: 0, orders: 0 };
+  if (adjusted.ask !== undefined && adjusted.ask !== null) scriptQuote.depth.sell[0] = { price: adjusted.ask, quantity: 0, orders: 0 };
+  return true;
 }
 
 socket.on('connect', () => {
@@ -86,8 +136,9 @@ socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange
     window._addedScriptsRef.forEach(script => {
       const exchMap = { 'nse_cm': 1, 'nse': 1, 'nse_fo': 2, 'nfo': 2, 'bse_cm': 3, 'bse': 3, 'bse_fo': 4, 'bfo': 4, 'mcx_fo': 5, 'mcx': 5, 'ncx_fo': 7, 'ncdex': 7, 'cde_fo': 13, 'cds': 13 };
       const exchType = exchMap[(script.exchange || '').toLowerCase()] || 1;
-      if (`${exchType}:${script.token}` === key && script.quote && script.quote.open !== undefined) {
-        patchQuoteFromWs(script.quote, liveQuote);
+      if (`${exchType}:${script.token}` === key) {
+        if (!script.quote) script.quote = createQuoteFromWs(liveQuote);
+        else patchQuoteFromWs(script.quote, liveQuote);
       }
     });
   }
@@ -1536,6 +1587,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const quoteFetchState = new Map();
+  const QUOTE_FETCH_COOLDOWN_MS = 15000;
+
   // Render the Watchlist Table in the dashboard
   function renderWatchlistTable() {
     // NOTE: We show the watchlist even when API is not connected,
@@ -1572,7 +1626,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     watchlistTbody.innerHTML = '';
     filtered.forEach(script => {
-      // Trigger dynamic quote fetching
+      const liveQuote = getLiveQuoteFromWS(script.exchange, script.token);
+      if (liveQuote) {
+        if (!script.quote) script.quote = createQuoteFromWs(liveQuote);
+        else patchQuoteFromWs(script.quote, liveQuote);
+      }
+
+      // Trigger REST only until we have a quote; WebSocket becomes primary once ticks arrive.
       fetchQuoteForScript(script);
 
       const q = script.quote || {
@@ -1590,9 +1650,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const changeColor = q.netChange === '--' ? '#718096' : (isPositive ? '#38a169' : '#e53e3e');
       const changeSign = q.netChange === '--' || parseFloat(q.netChange) < 0 ? '' : '+';
 
-      // Get LTP from WebSocket cache first (most real-time), fall back to REST quote
-      const wsLtp = getLtpFromWS(script.exchange, script.token);
-      const displayLtp = wsLtp !== null ? wsLtp : (q.ltp !== '--' ? parseFloat(q.ltp) : null);
+      // Display the accepted quote only; raw WS ticks are normalized before reaching script.quote.
+      const displayLtp = q.ltp !== '--' ? parseFloat(q.ltp) : null;
       const formattedLtp = displayLtp !== null
         ? displayLtp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         : '--';
@@ -1677,11 +1736,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch live market quotes from Express proxy server
   async function fetchQuoteForScript(script) {
     // Only skip if we have a FULL quote (one with open/high/low, not just a WS LTP stub)
-    if (script.quote && script.quote.open !== undefined) return;
+    if (script.quote && script.quote.open !== undefined && script.quote.open !== '--') return;
+    const key = getWsKey(script.exchange, script.token);
+    const state = quoteFetchState.get(key) || {};
+    const now = Date.now();
+    if (state.inFlight || (state.lastAttempt && now - state.lastAttempt < QUOTE_FETCH_COOLDOWN_MS)) return;
     if (!apiConnected) {
-      console.warn('[Quote] Skipping fetch for', script.code, '— apiConnected is false');
+      console.warn('[Quote] Skipping fetch for', script.code, '- apiConnected is false');
       return;
     }
+    quoteFetchState.set(key, { ...state, inFlight: true, lastAttempt: now });
     try {
       const url = `/api/market-data?exchange=${script.exchange}&token=${script.token}`;
       console.log('[Quote] Fetching:', url);
@@ -1697,6 +1761,7 @@ document.addEventListener('DOMContentLoaded', () => {
           result.data.ltp = wsLtp !== null ? wsLtp : result.data.ltp;
         }
         script.quote = result.data;
+        quoteFetchState.set(key, { inFlight: false, lastAttempt: 0 });
         console.log('[Quote] Set quote for', script.code, '| LTP:', result.data.ltp, '| Bid:', result.data.depth?.buy?.[0]?.price, '| Ask:', result.data.depth?.sell?.[0]?.price);
         renderWatchlistTable();
         if (selectedScript && selectedScript.code === script.code) {
@@ -1705,9 +1770,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } else {
         console.error('[Quote] Failed for', script.code, ':', result.error || result.message);
+        quoteFetchState.set(key, { inFlight: false, lastAttempt: Date.now() });
       }
     } catch (e) {
       console.error('[Quote] Exception for ' + script.code + ':', e.message);
+      quoteFetchState.set(key, { inFlight: false, lastAttempt: Date.now() });
     }
   }
 
@@ -2429,8 +2496,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Update every watchlist script using the latest full WS tick.
       addedScripts.forEach(script => {
         const liveQuote = getLiveQuoteFromWS(script.exchange, script.token);
-        if (liveQuote && script.quote && script.quote.open !== undefined) {
-          patchQuoteFromWs(script.quote, liveQuote);
+        if (liveQuote) {
+          if (!script.quote) script.quote = createQuoteFromWs(liveQuote);
+          else patchQuoteFromWs(script.quote, liveQuote);
         }
         // If no full quote yet, fetchQuoteForScript will be called by renderWatchlistTable
       });

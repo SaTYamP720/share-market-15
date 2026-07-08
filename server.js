@@ -854,6 +854,12 @@ app.get('/api/search-scripts', (req, res) => {
   });
 });
 
+// REST endpoint — browser can query current cache if needed as fallback
+app.get('/api/ws-cache', (req, res) => {
+  const result = {};
+  priceCache.forEach((val, key) => { result[key] = val; });
+  res.json({ success: true, count: priceCache.size, data: result });
+});
 // Catch-all route to serve index.html for any frontend routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -935,12 +941,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// REST endpoint — browser can query current cache if needed as fallback
-app.get('/api/ws-cache', (req, res) => {
-  const result = {};
-  priceCache.forEach((val, key) => { result[key] = val; });
-  res.json({ success: true, count: priceCache.size, data: result });
-});
 
 httpServer.listen(PORT, () => {
   console.log(`==================================================`);
