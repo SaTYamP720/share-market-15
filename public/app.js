@@ -618,6 +618,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Helper: get LTP for a script from wsLivePrices (accessible from any function in scope)
+  // Supports both short exchange names (NSE, MCX) and exch_seg names (nse_cm, mcx_fo)
+  function getLtpFromWS(exchange, token) {
+    const clean = (exchange || '').toLowerCase();
+    let exchType = 1;
+    if (clean === 'nse_cm' || clean === 'nse') exchType = 1;
+    else if (clean === 'nse_fo' || clean === 'nfo') exchType = 2;
+    else if (clean === 'bse_cm' || clean === 'bse') exchType = 3;
+    else if (clean === 'bse_fo' || clean === 'bfo') exchType = 4;
+    else if (clean === 'mcx_fo' || clean === 'mcx') exchType = 5;
+    else if (clean === 'ncx_fo' || clean === 'ncdex') exchType = 7;
+    else if (clean === 'cde_fo' || clean === 'cds') exchType = 13;
+    const key = `${exchType}:${token}`;
+    return wsLivePrices[key] !== undefined ? parseFloat(wsLivePrices[key]) : null;
+  }
+
+
+
   function saveWatchlist() {
     if (activePlatformUser) {
       localStorage.setItem('watchlist_' + activePlatformUser.email, JSON.stringify(addedScripts));
@@ -2319,22 +2337,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // HTTP fallback only for open position tokens NOT in watchlist.
   // =============================================
   function startLiveTicker() {
-
-    // Helper: get LTP for a script from wsLivePrices cache
-    // Supports both short names (NSE, MCX) and exch_seg names (nse_cm, mcx_fo)
-    function getLtpFromWS(exchange, token) {
-      const clean = (exchange || '').toLowerCase();
-      let exchType = 1;
-      if (clean === 'nse_cm' || clean === 'nse') exchType = 1;
-      else if (clean === 'nse_fo' || clean === 'nfo') exchType = 2;
-      else if (clean === 'bse_cm' || clean === 'bse') exchType = 3;
-      else if (clean === 'bse_fo' || clean === 'bfo') exchType = 4;
-      else if (clean === 'mcx_fo' || clean === 'mcx') exchType = 5;
-      else if (clean === 'ncx_fo' || clean === 'ncdex') exchType = 7;
-      else if (clean === 'cde_fo' || clean === 'cds') exchType = 13;
-      const key = `${exchType}:${token}`;
-      return wsLivePrices[key] !== undefined ? parseFloat(wsLivePrices[key]) : null;
-    }
 
     // UI refresh loop — runs every 500ms but reads from LOCAL wsLivePrices cache, no HTTP
     setInterval(() => {
