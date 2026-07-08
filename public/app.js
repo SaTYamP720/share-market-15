@@ -686,7 +686,6 @@ document.addEventListener('DOMContentLoaded', () => {
       fetchPositions();
     } else {
       document.getElementById('settings-nav-text').textContent = 'Login';
-      
       // Auto redirect to authentication tab if logged out on start
       navItems.forEach(nav => nav.classList.remove('active'));
       document.getElementById('settings-nav-btn').classList.add('active');
@@ -694,6 +693,8 @@ document.addEventListener('DOMContentLoaded', () => {
       pageSubtitle.textContent = 'Sign In or Sign Up';
       renderAuthView();
     }
+    // Always re-render watchlist after session check so prices & stocks show correctly
+    renderWatchlistTable();
   }
 
   // Fetch virtual positions from LocalStorage
@@ -1310,8 +1311,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Watchlist Action Buttons for Overlay opening
   const openOverlay = () => {
-    if (!apiConnected) {
-      showToast("Please connect your Angel One API in the Settings tab first to search and add scripts!", "warning");
+    if (!activePlatformUser) {
+      showToast("Please log in to your platform account first to add scripts!", "warning");
       return;
     }
     renderOverlayScripts();
@@ -1464,19 +1465,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Render the Watchlist Table in the dashboard
   function renderWatchlistTable() {
-    if (!apiConnected) {
-      watchlistTbody.innerHTML = `
-        <tr class="empty-state-row">
-          <td colspan="10" class="empty-state-cell">
-            <div class="empty-state-container">
-              <p>Your watchlist is empty</p>
-              <span style="font-size: 12px; color: #a0aec0; margin-top: 6px;">Connect your Angel One API in the Settings tab to search and add instruments.</span>
-            </div>
-          </td>
-        </tr>
-      `;
-      return;
-    }
+    // NOTE: We show the watchlist even when API is not connected,
+    // so users can see their added stocks. Prices just show '--' until connected.
 
     const searchVal = watchlistSearchInput.value.toLowerCase();
     const filtered = addedScripts.filter(s => 
@@ -1610,6 +1600,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchQuoteForScript(script) {
     // Only skip if we have a FULL quote (one with open/high/low, not just a WS LTP stub)
     if (script.quote && script.quote.open !== undefined) return;
+    if (!apiConnected) return; // Don't attempt fetch if not connected
     try {
       const response = await fetch(`/api/market-data?exchange=${script.exchange}&token=${script.token}`);
       const result = await response.json();
