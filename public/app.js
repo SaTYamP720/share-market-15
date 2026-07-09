@@ -1265,7 +1265,11 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('positions_db', JSON.stringify(positions));
 
     // Return margin + P&L to wallet (margin was what was actually debited at buy)
-    const marginPaid = pos.marginPaid || (pos.entryPrice * pos.quantity); // backward compat
+    // Issue 3: marginPaid is always stored correctly at order time; fallback uses exchange-specific rate
+    const exchForMargin = (pos.exchange || '').toUpperCase();
+    const misFallbackRate = (exchForMargin === 'MCX' || exchForMargin === 'NCDEX') ? 0.35 : exchForMargin === 'CDS' ? 0.10 : 0.20;
+    const fallbackMargin = orderType === 'MIS' ? (pos.entryPrice * pos.quantity * misFallbackRate) : (pos.entryPrice * pos.quantity);
+    const marginPaid = pos.marginPaid || fallbackMargin;
     const payout = marginPaid + pnl - penalty;
     activePlatformUser.walletBalance = (activePlatformUser.walletBalance || 0) + payout;
     saveUserData();
@@ -2133,6 +2137,14 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
+    // Helper: exchange-specific MIS margin rate (Issue 5 fix)
+    function getMisMarginRate(exchange) {
+      const exch = (exchange || '').toUpperCase();
+      if (exch === 'MCX' || exch === 'NCDEX') return 0.35;  // Commodities: ~35% (≈3x leverage)
+      if (exch === 'CDS') return 0.10;                       // Currency:    ~10% (≈10x leverage)
+      return 0.20;                                            // NSE/BSE/NFO: ~20% (≈5x leverage)
+    }
+
     // Helper: show order dialog and return params, or null if cancelled
     function showOrderDialog(side, price) {
       return new Promise((resolve) => {
@@ -2189,12 +2201,13 @@ document.addEventListener('DOMContentLoaded', () => {
           updateCalculations();
         };
 
-        // Live calculation updates
+        // Live calculation updates (uses exchange-specific MIS rate — Issue 5)
         function updateCalculations() {
           const qty = parseInt(qtyInput.value) || 0;
           const currentPrice = window.currentOrderModalPrice || price;
           const fullValue = currentPrice * qty;
-          const requiredMargin = currentOrderType === 'MIS' ? fullValue * 0.20 : fullValue;
+          const misRate = getMisMarginRate(selectedScript.exchange);
+          const requiredMargin = currentOrderType === 'MIS' ? fullValue * misRate : fullValue;
           marginEst.textContent = `₹${requiredMargin.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
         
@@ -2301,9 +2314,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const { qty, orderType, stopLoss, target } = params;
       const executionPrice = Number.isFinite(parseFloat(params.price)) && parseFloat(params.price) > 0 ? parseFloat(params.price) : buyPrice;
 
-      // Calculate margin (MIS = 20% of full value, NRML = 100%)
-      const fullValue = executionPrice * qty;
-      const marginRequired = orderType === 'MIS' ? fullValue * 0.20 : fullValue;
+      // Issue 4: Apply 0.05% slippage on BUY (fills slightly above Ask — realistic market order)
+      const slippedBuyPrice = executionPrice * 1.0005;
+      const slippedExecution = parseFloat(slippedBuyPrice.toFixed(2));
+
+      // Issue 5: Exchange-specific MIS margin rate
+      const misRate = getMisMarginRate(selectedScript.exchange);
+      const fullValue = slippedExecution * qty;
+      const marginRequired = orderType === 'MIS' ? fullValue * misRate : fullValue;
 
       if (marginRequired > activePlatformUser.walletBalance) {
         logRejection('BUY', qty, `Insufficient balance (Need ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })})`);
@@ -2323,8 +2341,8 @@ document.addEventListener('DOMContentLoaded', () => {
         token: selectedScript.token,
         side: 'BUY',
         orderType,
-        entryPrice: executionPrice,
-        buyPrice: executionPrice, // backward compat
+        entryPrice: slippedExecution,
+        buyPrice: slippedExecution, // backward compat
         quantity: qty,
         fullTradeValue: fullValue,
         marginPaid: marginRequired,
@@ -2344,7 +2362,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       logTransaction('TRADE_BUY', -marginRequired);
-      showToast(`BUY order placed!\n${selectedScript.code} LONG ${qty} units @ ₹${executionPrice.toFixed(2)}`, 'success');
+      showToast(`BUY order placed!\n${selectedScript.code} LONG ${qty} units @ ₹${slippedExecution.toFixed(2)} (incl. slippage)`, 'success');
       
       updateHeaderBalance();
       fetchPositions();
@@ -2387,8 +2405,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const { qty, orderType, stopLoss, target } = params;
       const executionPrice = Number.isFinite(parseFloat(params.price)) && parseFloat(params.price) > 0 ? parseFloat(params.price) : sellPrice;
 
-      const fullValue = executionPrice * qty;
-      const marginRequired = orderType === 'MIS' ? fullValue * 0.20 : fullValue;
+      // Issue 4: Apply 0.05% slippage on SELL SHORT (fills slightly below Bid — realistic market order)
+      const slippedSellPrice = executionPrice * 0.9995;
+      const slippedExecution = parseFloat(slippedSellPrice.toFixed(2));
+
+      // Issue 5: Exchange-specific MIS margin rate
+      const misRate = getMisMarginRate(selectedScript.exchange);
+      const fullValue = slippedExecution * qty;
+      const marginRequired = orderType === 'MIS' ? fullValue * misRate : fullValue;
 
       if (marginRequired > activePlatformUser.walletBalance) {
         logRejection('SELL SHORT', qty, `Insufficient balance (Need ₹${marginRequired.toLocaleString('en-IN', { maximumFractionDigits: 2 })})`);
@@ -2408,8 +2432,8 @@ document.addEventListener('DOMContentLoaded', () => {
         token: selectedScript.token,
         side: 'SELL',
         orderType,
-        entryPrice: executionPrice,
-        buyPrice: executionPrice, // backward compat
+        entryPrice: slippedExecution,
+        buyPrice: slippedExecution, // backward compat
         quantity: qty,
         fullTradeValue: fullValue,
         marginPaid: marginRequired,
@@ -2429,7 +2453,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       logTransaction('TRADE_SELL_SHORT', -marginRequired);
-      showToast(`SELL SHORT order placed!\n${selectedScript.code} SHORT ${qty} units @ ₹${executionPrice.toFixed(2)}`, 'success');
+      showToast(`SELL SHORT order placed!\n${selectedScript.code} SHORT ${qty} units @ ₹${slippedExecution.toFixed(2)} (incl. slippage)`, 'success');
       
       updateHeaderBalance();
       fetchPositions();
