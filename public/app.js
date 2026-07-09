@@ -1045,7 +1045,23 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
 
       tr.querySelector('.btn-squareoff-pos').addEventListener('click', () => {
-        closeVirtualPosition(pos.id, exitPrice, 'MANUAL');
+        // Re-fetch the latest live quote at the moment of click — never use stale render-time price
+        const matchingScriptNow = addedScripts.find(s => s.token === pos.token);
+        const liveQuoteNow = (matchingScriptNow && matchingScriptNow.quote) ? matchingScriptNow.quote
+                           : positionQuoteCache[pos.token] || null;
+        const ltpNow = liveQuoteNow ? parseFloat(liveQuoteNow.ltp) : exitPrice;
+        const sideNow = pos.side || 'BUY';
+        let freshExitPrice;
+        if (sideNow === 'BUY') {
+          // LONG exits at Bid
+          freshExitPrice = liveQuoteNow && liveQuoteNow.depth && liveQuoteNow.depth.buy && liveQuoteNow.depth.buy.length > 0
+            ? parseFloat(liveQuoteNow.depth.buy[0].price) : ltpNow;
+        } else {
+          // SHORT exits at Ask
+          freshExitPrice = liveQuoteNow && liveQuoteNow.depth && liveQuoteNow.depth.sell && liveQuoteNow.depth.sell.length > 0
+            ? parseFloat(liveQuoteNow.depth.sell[0].price) : ltpNow;
+        }
+        closeVirtualPosition(pos.id, freshExitPrice, 'MANUAL');
       });
 
       tr.querySelector('.btn-modify-sl-tgt').addEventListener('click', async () => {
