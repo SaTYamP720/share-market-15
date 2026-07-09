@@ -1191,8 +1191,7 @@ document.addEventListener('DOMContentLoaded', () => {
       pnl = (pos.entryPrice - exitPrice) * pos.quantity;
     }
 
-    // Penalty for auto squareoff
-    const penalty = (closeReason === 'AUTO_SQUAREOFF') ? 59 : 0; // ₹50 + 18% GST
+    const penalty = 0; // No auto squareoff penalty
 
     // Close position
     pos.status = 'CLOSED';
@@ -1211,7 +1210,6 @@ document.addEventListener('DOMContentLoaded', () => {
     logTransaction('TRADE_CLOSE', payout, pnl);
 
     let alertMsg = `Position squared off!\n${pos.symbol} ${side} closed at ₹${exitPrice.toFixed(2)}\nP&L: ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}`;
-    if (penalty > 0) alertMsg += `\n⚠️ Auto Squareoff Penalty: ₹${penalty} deducted.`;
     showToast(alertMsg, pnl >= 0 ? 'success' : 'error');
     
     updateHeaderBalance();
@@ -1261,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const side = pos.side || 'BUY';
       const sideColor = side === 'BUY' ? '#38a169' : '#e53e3e';
       const orderType = pos.orderType || 'NRML';
-      const closeReasonBadge = pos.closeReason === 'AUTO_SQUAREOFF' ? '⚠️ AUTO' : pos.closeReason === 'SL_HIT' ? '🔴 SL' : pos.closeReason === 'TARGET_HIT' ? '🟢 TGT' : '';
+      const closeReasonBadge = pos.closeReason === 'SL_HIT' ? '🔴 SL' : pos.closeReason === 'TARGET_HIT' ? '🟢 TGT' : '';
       tr.innerHTML = `
         <td>${pos.createdAt || '--'}</td>
         <td class="bold">${pos.symbol}<div style="font-size:9px;color:#a0aec0;">${pos.exchange}</div></td>
@@ -2523,53 +2521,6 @@ document.addEventListener('DOMContentLoaded', () => {
     marginEst.textContent = `₹${requiredMargin.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
-  // Auto squareoff MIS positions past their exchange cutoff (runs every 30s)
-  function startAutoSquareOff() {
-    setInterval(() => {
-      if (!activePlatformUser) return;
-      const positions = JSON.parse(localStorage.getItem('positions_db') || '[]');
-      const openMIS = positions.filter(p =>
-        p.userEmail === activePlatformUser.email &&
-        p.status === 'OPEN' &&
-        (p.orderType || 'NRML') === 'MIS'
-      );
-      if (openMIS.length === 0) return;
-
-      const now = new Date();
-      const istOffset = 5.5 * 60 * 60 * 1000;
-      const ist = new Date(now.getTime() + istOffset);
-      const h = ist.getUTCHours();
-      const m = ist.getUTCMinutes();
-      const totalMin = h * 60 + m;
-      const day = ist.getUTCDay(); // 0=Sun, 6=Sat
-
-      if (day === 0 || day === 6) return; // No squareoff on weekends
-
-      openMIS.forEach(pos => {
-        let cutoff = null;
-        const exch = (pos.exchange || '').toUpperCase();
-        if (exch === 'MCX') cutoff = 23 * 60 + 15;       // 11:15 PM
-        else if (exch === 'CDS') cutoff = 16 * 60 + 45;  // 4:45 PM
-        else cutoff = 15 * 60 + 15;                        // 3:15 PM (NSE/NFO/BSE)
-
-        if (totalMin >= cutoff) {
-          const matchingScript = addedScripts.find(s => s.token === pos.token);
-          const liveQuote = (matchingScript && matchingScript.quote) ? matchingScript.quote
-                          : positionQuoteCache[pos.token] || null;
-          const ltp = liveQuote ? parseFloat(liveQuote.ltp) : (pos.entryPrice || pos.buyPrice);
-          const side = pos.side || 'BUY';
-          let exitPrice = ltp;
-          if (liveQuote) {
-            if (side === 'BUY' && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy.length > 0)
-              exitPrice = parseFloat(liveQuote.depth.buy[0].price);
-            else if (side === 'SELL' && liveQuote.depth && liveQuote.depth.sell && liveQuote.depth.sell.length > 0)
-              exitPrice = parseFloat(liveQuote.depth.sell[0].price);
-          }
-          closeVirtualPosition(pos.id, exitPrice, 'AUTO_SQUAREOFF');
-        }
-      });
-    }, 30000); // Check every 30 seconds
-  }
 
   // =============================================
   // STEP 4: WebSocket-driven live ticker (replaces HTTP polling)
@@ -2703,7 +2654,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   startLiveTicker();
-  startAutoSquareOff();
+
 
   // Filter watchlist list on search typing
   watchlistSearchInput.addEventListener('input', renderWatchlistTable);
