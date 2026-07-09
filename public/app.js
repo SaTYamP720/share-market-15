@@ -38,7 +38,7 @@ function formatPricePlain(value) {
   const text = String(value).trim().replace(/,/g, '');
   const parsed = Number(text);
   if (!Number.isFinite(parsed)) return '--';
-  return text.includes('.') ? text : parsed.toFixed(2);
+  return parsed.toFixed(2);
 }
 
 function createQuoteFromWs(liveQuote) {
@@ -2000,9 +2000,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Price Display -->
         <div style="display: flex; justify-content: space-between; align-items: baseline;">
           <div>
-            <div style="font-size: 26px; font-weight: 700; ${colorStyle}">${q.ltp}</div>
+            <div style="font-size: 26px; font-weight: 700; ${colorStyle}">${formatPricePlain(q.ltp)}</div>
             <div style="font-size: 12px; font-weight: 600; ${colorStyle} margin-top: 2px;">
-              ${sign}${q.netChange} (${sign}${q.percentChange}%)
+              ${sign}${formatPricePlain(q.netChange)} (${sign}${formatPricePlain(q.percentChange)}%)
             </div>
           </div>
           <div style="text-align: right; font-size: 12px;">
@@ -2015,19 +2015,19 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border-top: 1px solid #edf2f7; border-bottom: 1px solid #edf2f7; padding: 12px 0;">
           <div style="text-align: center;">
             <div style="font-size: 10px; color: #a0aec0; font-weight: 600; text-transform: uppercase;">Open</div>
-            <div style="font-size: 12px; font-weight: 600; color: #2d3748; margin-top: 4px;">${q.open}</div>
+            <div style="font-size: 12px; font-weight: 600; color: #2d3748; margin-top: 4px;">${formatPricePlain(q.open)}</div>
           </div>
           <div style="text-align: center;">
             <div style="font-size: 10px; color: #a0aec0; font-weight: 600; text-transform: uppercase;">High</div>
-            <div style="font-size: 12px; font-weight: 600; color: #2d3748; margin-top: 4px;">${q.high}</div>
+            <div style="font-size: 12px; font-weight: 600; color: #2d3748; margin-top: 4px;">${formatPricePlain(q.high)}</div>
           </div>
           <div style="text-align: center;">
             <div style="font-size: 10px; color: #a0aec0; font-weight: 600; text-transform: uppercase;">Low</div>
-            <div style="font-size: 12px; font-weight: 600; color: #2d3748; margin-top: 4px;">${q.low}</div>
+            <div style="font-size: 12px; font-weight: 600; color: #2d3748; margin-top: 4px;">${formatPricePlain(q.low)}</div>
           </div>
           <div style="text-align: center;">
             <div style="font-size: 10px; color: #a0aec0; font-weight: 600; text-transform: uppercase;">Close</div>
-            <div style="font-size: 12px; font-weight: 600; color: #2d3748; margin-top: 4px;">${q.close}</div>
+            <div style="font-size: 12px; font-weight: 600; color: #2d3748; margin-top: 4px;">${formatPricePlain(q.close)}</div>
           </div>
         </div>
 
