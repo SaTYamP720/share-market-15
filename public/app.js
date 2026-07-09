@@ -2299,20 +2299,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Check market hours
-      const bypass = localStorage.getItem('bypassMarketHours') === 'true';
-      const marketStatus = isMarketOpen(selectedScript.exchange);
-      if (!marketStatus.open && !bypass) {
-        logRejection('BUY', '?', `Market Closed: ${marketStatus.reason}`);
-        showToast(`Order Rejected: ${marketStatus.reason}\n\n(Tip: Enable "Bypass market hours" in Profile settings to test anytime).`, 'error');
-        return;
-      }
-
-      // Show order dialog
+      // Show order dialog first — market check happens AFTER user fills the form
       const params = await showOrderDialog('BUY', buyPrice);
       if (!params) return;
       const { qty, orderType, stopLoss, target } = params;
       const executionPrice = Number.isFinite(parseFloat(params.price)) && parseFloat(params.price) > 0 ? parseFloat(params.price) : buyPrice;
+
+      // Check market hours after dialog — show clean failure popup
+      const bypass = localStorage.getItem('bypassMarketHours') === 'true';
+      const marketStatus = isMarketOpen(selectedScript.exchange);
+      if (!marketStatus.open && !bypass) {
+        logRejection('BUY', qty, `Market Closed: ${marketStatus.reason}`);
+        showToast(`Order Failed: Market Closed`, 'error');
+        return;
+      }
 
       // Issue 4: Apply 0.05% slippage on BUY (fills slightly above Ask — realistic market order)
       const slippedBuyPrice = executionPrice * 1.0005;
@@ -2390,20 +2390,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // No open long → open a SHORT position
-      const bypass = localStorage.getItem('bypassMarketHours') === 'true';
-      const marketStatus = isMarketOpen(selectedScript.exchange);
-      if (!marketStatus.open && !bypass) {
-        logRejection('SELL SHORT', '?', `Market Closed: ${marketStatus.reason}`);
-        showToast(`Order Rejected: ${marketStatus.reason}`, 'error');
-        return;
-      }
-
-      // Show order dialog
+      // Show order dialog first — market check happens AFTER user fills the form
       const params = await showOrderDialog('SELL', sellPrice);
       if (!params) return;
       const { qty, orderType, stopLoss, target } = params;
       const executionPrice = Number.isFinite(parseFloat(params.price)) && parseFloat(params.price) > 0 ? parseFloat(params.price) : sellPrice;
+
+      // Check market hours after dialog — show clean failure popup
+      const bypass = localStorage.getItem('bypassMarketHours') === 'true';
+      const marketStatus = isMarketOpen(selectedScript.exchange);
+      if (!marketStatus.open && !bypass) {
+        logRejection('SELL SHORT', qty, `Market Closed: ${marketStatus.reason}`);
+        showToast(`Order Failed: Market Closed`, 'error');
+        return;
+      }
 
       // Issue 4: Apply 0.05% slippage on SELL SHORT (fills slightly below Bid — realistic market order)
       const slippedSellPrice = executionPrice * 0.9995;
