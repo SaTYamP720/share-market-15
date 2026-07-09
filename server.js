@@ -5,6 +5,14 @@ const path = require('path');
 const { SmartAPI } = require('smartapi-javascript');
 const { generateSync } = require('otplib');
 
+// Process-wide error handlers to prevent unhandled exceptions (e.g. from websocket heartbeat) from crashing the server
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Uncaught Exception:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Process] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 const app = express();
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
