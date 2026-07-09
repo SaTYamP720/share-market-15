@@ -893,3 +893,198 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
+/* ============================================================
+   HAMBURGER BUTTON (hidden on desktop, shown on mobile/tablet)
+   ============================================================ */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: 1px solid #eef2f6;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #4a5568;
+  margin-right: 8px;
+  transition: background 0.2s;
+}
+.hamburger-btn:hover { background: #f7fafc; }
+.hamburger-btn svg { width: 18px; height: 18px; }
+
+/* Sidebar overlay backdrop */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 200;
+  backdrop-filter: blur(2px);
+}
+.sidebar-overlay.active { display: block; }
+
+/* ============================================================
+   TABLET — 769px to 1024px
+   ============================================================ */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 200px;
+  }
+  .brand-text h1 { font-size: 12px; }
+  .sub-brand { font-size: 10px; }
+  .nav-item { font-size: 12px; padding: 9px 10px; }
+  .nav-icon { width: 16px; height: 16px; margin-right: 8px; }
+  .section-title { font-size: 9px; padding: 8px 10px; }
+
+  .top-header { padding: 12px 16px; height: auto; }
+  .header-left h2 { font-size: 17px; }
+  .balance-display { font-size: 12px; }
+  .header-lower-row { font-size: 11px; gap: 10px; }
+  .btn { font-size: 12px; padding: 5px 10px; height: 30px; }
+
+  .view-container { padding: 16px; }
+
+  /* Watchlist: hide the details panel on tablet unless selected */
+  .watchlist-layout { gap: 16px; }
+  .instrument-details-panel { width: 280px; min-width: 260px; }
+
+  /* Tables: reduce padding */
+  .terminal-table th { padding: 10px 12px; font-size: 10px; }
+  .terminal-table td { padding: 12px 12px; font-size: 12px; }
+}
+
+/* ============================================================
+   MOBILE — ≤768px
+   ============================================================ */
+@media (max-width: 768px) {
+
+  /* --- Body & Layout --- */
+  body { overflow: auto; height: auto; }
+  .terminal-container { flex-direction: column; height: auto; min-height: 100vh; }
+
+  /* --- Sidebar: slide-in drawer --- */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 260px;
+    z-index: 300;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  /* --- Hamburger visible --- */
+  .hamburger-btn { display: inline-flex; }
+
+  /* --- Main Content --- */
+  .main-content { width: 100%; height: auto; overflow: visible; }
+
+  /* --- Top Header --- */
+  .top-header {
+    padding: 10px 14px;
+    height: auto;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .header-left { gap: 6px; width: 100%; }
+  .header-left h2 { font-size: 16px; }
+  .page-subtitle { font-size: 11px; }
+
+  .header-right { width: 100%; align-items: flex-start; gap: 6px; }
+  .header-upper-row { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+  .balance-display { font-size: 12px; }
+  .action-buttons { gap: 5px; }
+  .btn { font-size: 11px; padding: 4px 8px; height: 28px; }
+  .btn-icon { width: 12px; height: 12px; margin-right: 4px; }
+
+  .header-lower-row { font-size: 10.5px; gap: 8px; flex-wrap: wrap; }
+
+  /* --- View Container --- */
+  .view-container { padding: 12px 10px; }
+
+  /* --- Watchlist Layout: stack vertically --- */
+  .watchlist-layout { flex-direction: column; height: auto; gap: 12px; }
+  .watchlist-main { overflow: visible; }
+  .instrument-details-panel {
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: 100% !important;
+    border-left: none !important;
+    border-top: 1px solid #eef2f6;
+  }
+
+  /* --- Watchlist Header Bar --- */
+  .watchlist-header-bar { flex-wrap: wrap; gap: 8px; }
+  .watchlist-header-right { flex-wrap: wrap; gap: 8px; width: 100%; }
+  .watchlist-search-box input { width: 100%; }
+  .watchlist-search-box input:focus { width: 100%; }
+  .watchlist-search-box { flex: 1; }
+
+  /* --- Tables: horizontal scroll + hide extra columns --- */
+  .watchlist-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .terminal-table { min-width: 520px; }
+  .terminal-table th { padding: 9px 10px; font-size: 10px; }
+  .terminal-table td { padding: 10px 10px; font-size: 12px; }
+
+  /* Hide less important columns on mobile */
+  .terminal-table .col-open,
+  .terminal-table .col-close,
+  .terminal-table .col-high,
+  .terminal-table .col-low { display: none; }
+
+  /* --- Positions table scroll --- */
+  #positions-table-wrapper,
+  #orders-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* --- Order / Confirm Modals --- */
+  #order-modal .modal-content,
+  #order-modal > div,
+  #confirm-modal > div {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    margin: auto;
+    border-radius: 16px !important;
+  }
+
+  /* --- Toast: bottom-right on mobile --- */
+  #toast-container {
+    top: auto !important;
+    bottom: 16px;
+    right: 12px;
+    left: 12px;
+    align-items: stretch;
+  }
+  .toast-msg {
+    min-width: unset !important;
+    max-width: 100% !important;
+    font-size: 12.5px;
+  }
+  @keyframes toastSlideIn {
+    from { transform: translateY(80px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* --- Details Panel BUY/SELL buttons --- */
+  .btn-buy-action, .btn-sell-action {
+    font-size: 13px !important;
+    padding: 10px 8px !important;
+  }
+
+  /* --- Empty state height --- */
+  .empty-state-container { height: 200px; }
+}
+
+/* ============================================================
+   VERY SMALL MOBILE — ≤400px
+   ============================================================ */
+@media (max-width: 400px) {
+  .top-header { padding: 8px 10px; }
+  .btn { font-size: 10px; padding: 3px 7px; height: 26px; }
+  .header-left h2 { font-size: 14px; }
+  .action-buttons .btn-live-tv { display: none; } /* hide on very small */
+}
