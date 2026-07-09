@@ -125,6 +125,11 @@ socket.on('price_tick', ({ key, ltp, bid, ask, open, high, low, close, netChange
   if (typeof window._refreshSelectedDetailsFromTick === 'function') {
     window._refreshSelectedDetailsFromTick(key, liveQuote);
   }
+
+  // Live P&L update for open Positions table rows matching this tick
+  if (typeof window._refreshPositionRowsFromTick === 'function') {
+    window._refreshPositionRowsFromTick(key, liveQuote);
+  }
 });
 
 
@@ -870,6 +875,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
+  // Live in-place P&L updater for the Positions table — called on every WS tick
+  window._refreshPositionRowsFromTick = (key, liveQuote) => {
+    const rows = document.querySelectorAll(`tr[data-pos-ws-key="${key}"]`);
+    if (!rows.length) return;
+
+    rows.forEach(tr => {
+      const posSide    = tr.dataset.posSide || 'BUY';
+      const entryPrice = parseFloat(tr.dataset.posEntry) || 0;
+      const qty        = parseFloat(tr.dataset.posQty)   || 0;
+      const ltp        = liveQuote && liveQuote.ltp ? parseFloat(liveQuote.ltp) : entryPrice;
+
+      let freshExit;
+      if (posSide === 'BUY') {
+        freshExit = liveQuote && liveQuote.depth && liveQuote.depth.buy && liveQuote.depth.buy[0]
+          ? parseFloat(liveQuote.depth.buy[0].price) : ltp;
+      } else {
+        freshExit = liveQuote && liveQuote.depth && liveQuote.depth.sell && liveQuote.depth.sell[0]
+          ? parseFloat(liveQuote.depth.sell[0].price) : ltp;
+      }
+
+      const pl = posSide === 'BUY'
+        ? (freshExit - entryPrice) * qty
+        : (entryPrice - freshExit) * qty;
+
+      const exitCell = tr.querySelector('.pos-exit-cell');
+      const plCell   = tr.querySelector('.pos-pl-cell');
+
+      if (exitCell) exitCell.textContent = `₹${freshExit.toFixed(2)}`;
+      if (plCell) {
+        plCell.textContent = `${pl >= 0 ? '+' : ''}₹${pl.toFixed(2)}`;
+        plCell.className = `pos-pl-cell ${pl >= 0 ? 'green' : 'red'}`;
+        plCell.style.fontWeight = '700';
+      }
+    });
+  };
+
   // Helper: get LTP for a script from wsLivePrices (accessible from any function in scope)
   // Supports both short exchange names (NSE, MCX) and exch_seg names (nse_cm, mcx_fo)
   function getLtpFromWS(exchange, token) {
@@ -1016,7 +1057,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const slText = pos.stopLoss ? `SL: ₹${parseFloat(pos.stopLoss).toFixed(2)}` : '—';
       const tgtText = pos.target ? `TGT: ₹${parseFloat(pos.target).toFixed(2)}` : '—';
 
+      const exchTypeMap2 = { 'nse_cm': 1, 'nse': 1, 'nse_fo': 2, 'nfo': 2, 'bse_cm': 3, 'bse': 3, 'bse_fo': 4, 'bfo': 4, 'mcx_fo': 5, 'mcx': 5, 'ncx_fo': 7, 'ncdex': 7, 'cde_fo': 13, 'cds': 13 };
+      const posWsKey = `${exchTypeMap2[(pos.exchange || '').toLowerCase()] || 1}:${pos.token}`;
       const tr = document.createElement('tr');
+      tr.dataset.posWsKey = posWsKey;
+      tr.dataset.posSide = side;
+      tr.dataset.posEntry = entryPrice;
+      tr.dataset.posQty = pos.quantity;
       tr.innerHTML = `
         <td class="bold">${pos.symbol}<div style="font-size:9px;color:#a0aec0;margin-top:2px;">${pos.exchange}</div></td>
         <td>
@@ -1026,12 +1073,12 @@ document.addEventListener('DOMContentLoaded', () => {
         <td style="color:${sideColor};font-weight:700;">${side}</td>
         <td>${pos.quantity}</td>
         <td>₹${entryPrice.toFixed(2)}</td>
-        <td>₹${exitPrice.toFixed(2)}</td>
+        <td class="pos-exit-cell">₹${exitPrice.toFixed(2)}</td>
         <td style="font-size:10px;color:#718096;">
           <div>${slText}</div>
           <div>${tgtText}</div>
         </td>
-        <td class="${plClass}" style="font-weight:700;">${plSign}₹${pl.toFixed(2)}</td>
+        <td class="pos-pl-cell ${plClass}" style="font-weight:700;">${plSign}₹${pl.toFixed(2)}</td>
         <td>
           <div style="display:flex;gap:4px;">
             <button class="btn btn-withdraw btn-squareoff-pos" data-id="${pos.id}" style="height:24px;padding:2px 8px;font-size:11px;background-color:#fff5f5;border-color:#e53e3e;color:#e53e3e;">
