@@ -2174,13 +2174,13 @@ document.addEventListener('DOMContentLoaded', () => {
           const finalPrice = window.currentOrderModalPrice || price;
 
           if (isNaN(qty) || qty <= 0) {
-            showToast('Please enter a valid positive quantity.', 'error');
+            showToast('Please enter a valid positive number of lots.', 'error');
             return;
           }
 
           const exch = (selectedScript.exchange || '').toUpperCase();
           if ((exch === 'NFO' || exch === 'MCX' || exch === 'CDS') && qty % defaultQty !== 0) {
-            showToast(`Order Rejected: Quantity must be in multiples of the lot size (${defaultQty}) for ${selectedScript.code}.`, 'error');
+            showToast(`Order Rejected: Lot count must be in multiples of the minimum lot size (${defaultQty}) for ${selectedScript.code}.`, 'error');
             return;
           }
 
