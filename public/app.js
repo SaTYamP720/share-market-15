@@ -1092,11 +1092,11 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="display: flex; flex-direction: column; gap: 12px;">
              <div style="display: flex; flex-direction: column; gap: 6px;">
                <label style="font-size: 11px; font-weight: 700; color: #4a5568;">STOP-LOSS PRICE (Clear to disable)</label>
-               <input type="number" step="any" id="modify-sl-input" value="${pos.stopLoss || ''}" placeholder="e.g. ₹245.00" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%;">
+               <input type="number" step="any" id="modify-sl-input" value="${pos.stopLoss ? parseFloat(pos.stopLoss).toFixed(2) : ''}" placeholder="e.g. ₹245.00" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%;">
              </div>
              <div style="display: flex; flex-direction: column; gap: 6px;">
                <label style="font-size: 11px; font-weight: 700; color: #4a5568;">TARGET PRICE (Clear to disable)</label>
-               <input type="number" step="any" id="modify-tgt-input" value="${pos.target || ''}" placeholder="e.g. ₹265.00" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%;">
+               <input type="number" step="any" id="modify-tgt-input" value="${pos.target ? parseFloat(pos.target).toFixed(2) : ''}" placeholder="e.g. ₹265.00" style="padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; outline: none; background: #f8fafc; color: #1a202c; width: 100%;">
              </div>
           </div>
 
@@ -1808,8 +1808,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <td style="color: #38a169; font-weight: 500;" data-bid-key="${wsKeyForRow}">${formattedBid}</td>
         <td style="color: #e53e3e; font-weight: 500;" data-ask-key="${wsKeyForRow}">${formattedAsk}</td>
         <td style="color: ${changeColor}; font-size: 11px; font-weight: 500;">
-          <div>${changeSign}${q.netChange}</div>
-          <div style="font-size: 9px; margin-top: 2px;">${changeSign}${q.percentChange}%</div>
+          <div>${changeSign}${formatPricePlain(q.netChange)}</div>
+          <div style="font-size: 9px; margin-top: 2px;">${changeSign}${formatPricePlain(q.percentChange)}%</div>
         </td>
         <td>${formattedHigh}</td>
         <td>${formattedLow}</td>
