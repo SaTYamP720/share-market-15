@@ -827,10 +827,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const bidVal = rawBid > 0 ? rawBid : (parseFloat(q.ltp) || 0);
     const askVal = rawAsk > 0 ? rawAsk : (parseFloat(q.ltp) || 0);
 
-    const bidSpan = container.querySelector('span[style*="color: #38a169"]');
+    const bidSpan = container.querySelector('.details-bid-val');
     if (bidSpan) bidSpan.textContent = `₹${bidVal.toFixed(2)}`;
 
-    const askSpan = container.querySelector('span[style*="color: #e53e3e"]');
+    const askSpan = container.querySelector('.details-ask-val');
     if (askSpan) askSpan.textContent = `₹${askVal.toFixed(2)}`;
 
     // 4. Update BUY / SELL button labels
@@ -2006,8 +2006,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div style="text-align: right; font-size: 12px;">
-            <div style="color: #718096; margin-bottom: 2px;">BID <span style="color: #38a169; font-weight: 600; margin-left: 4px;">₹${bidVal.toFixed(2)}</span></div>
-            <div style="color: #718096;">ASK <span style="color: #e53e3e; font-weight: 600; margin-left: 4px;">₹${askVal.toFixed(2)}</span></div>
+            <div style="color: #718096; margin-bottom: 2px;">BID <span class="details-bid-val" style="color: #38a169; font-weight: 600; margin-left: 4px;">₹${bidVal.toFixed(2)}</span></div>
+            <div style="color: #718096;">ASK <span class="details-ask-val" style="color: #e53e3e; font-weight: 600; margin-left: 4px;">₹${askVal.toFixed(2)}</span></div>
           </div>
         </div>
 
