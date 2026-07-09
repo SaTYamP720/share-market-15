@@ -2496,7 +2496,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const qtyInput = document.getElementById('order-qty-input');
     const marginEst = document.getElementById('order-modal-margin-est');
     
-    const price = getQuoteTradePrice(quote);
+    // Check if the open modal is for BUY or SELL
+    const actionBadge = document.getElementById('order-modal-action-badge');
+    const side = actionBadge ? actionBadge.textContent.trim().toUpperCase() : 'BUY';
+
+    const { ltp, bidPrice, askPrice } = getQuoteSidePrices(quote);
+    let price;
+    if (side === 'BUY') {
+      price = Number.isFinite(askPrice) && askPrice > 0 ? askPrice : ltp;
+    } else {
+      price = Number.isFinite(bidPrice) && bidPrice > 0 ? bidPrice : ltp;
+    }
+
     if (isNaN(price) || price <= 0) return;
 
     priceEl.textContent = `₹${price.toFixed(2)}`;
