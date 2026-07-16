@@ -582,9 +582,9 @@ document.addEventListener('DOMContentLoaded', () => {
     pane.id = 'view-dynamic-auth';
     
     pane.innerHTML = `
-      <div style="display: flex; gap: 30px; max-width: 800px; margin: 0 auto; padding-top: 20px;">
+      <div class="auth-cards-container">
         <!-- Login Card -->
-        <div style="flex: 1; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
+        <div class="auth-card" style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
           <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #1a202c;">Client Login</h3>
           <div class="form-group">
             <label style="font-size: 12px; font-weight: 600; color: #4a5568;">Email Address</label>
@@ -598,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <!-- Register Card -->
-        <div style="flex: 1; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
+        <div class="auth-card" style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
           <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #1a202c;">Client Sign Up</h3>
           <div class="form-group">
             <label style="font-size: 12px; font-weight: 600; color: #4a5568;">Full Name</label>

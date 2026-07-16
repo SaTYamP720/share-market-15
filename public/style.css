@@ -966,6 +966,30 @@ body {
 .sidebar-overlay.active { display: block; }
 
 /* ============================================================
+   AUTH CARDS CONTAINER (Login + Sign-Up side-by-side on desktop)
+   ============================================================ */
+.auth-cards-container {
+  display: flex;
+  gap: 30px;
+  max-width: 800px;
+  margin: 0 auto;
+  padding-top: 20px;
+}
+
+.auth-card {
+  flex: 1;
+  min-width: 0; /* prevents flex items from overflowing */
+}
+
+/* ============================================================
+   TABLE SCROLL WRAPPER (generic reusable class)
+   ============================================================ */
+.table-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================================
    TABLET — 769px to 1024px
    ============================================================ */
 @media (max-width: 1024px) {
@@ -1035,10 +1059,19 @@ body {
   .header-left h2 { font-size: 16px; }
   .page-subtitle { font-size: 11px; }
 
-  .header-right { width: 100%; align-items: flex-start; gap: 6px; }
-  .header-upper-row { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+  .header-right {
+    width: 100%;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .header-upper-row {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
   .balance-display { font-size: 12px; }
-  .action-buttons { gap: 5px; }
+  .action-buttons { gap: 5px; flex-wrap: wrap; }
   .btn { font-size: 11px; padding: 4px 8px; height: 28px; }
   .btn-icon { width: 12px; height: 12px; margin-right: 4px; }
 
@@ -1046,6 +1079,18 @@ body {
 
   /* --- View Container --- */
   .view-container { padding: 12px 10px; }
+
+  /* --- Auth Cards: stack vertically on mobile --- */
+  .auth-cards-container {
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 10px;
+    max-width: 100%;
+  }
+  .auth-card {
+    flex: none;
+    width: 100%;
+  }
 
   /* --- Watchlist Layout: stack vertically --- */
   .watchlist-layout { flex-direction: column; height: auto; gap: 12px; }
@@ -1065,11 +1110,19 @@ body {
   .watchlist-search-box input:focus { width: 100%; }
   .watchlist-search-box { flex: 1; }
 
-  /* --- Tables: horizontal scroll + hide extra columns --- */
+  /* --- Tables: horizontal scroll wrapper --- */
   .watchlist-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-scroll-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .terminal-table { min-width: 520px; }
   .terminal-table th { padding: 9px 10px; font-size: 10px; }
   .terminal-table td { padding: 10px 10px; font-size: 12px; }
+
+  /* Wrap standalone tables (positions, orders, trade-history, etc.) */
+  .view-pane > table.terminal-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 
   /* Hide less important columns on mobile */
   .terminal-table .col-open,
@@ -1081,17 +1134,24 @@ body {
   #positions-table-wrapper,
   #orders-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-  /* --- Order / Confirm Modals --- */
-  #order-modal .modal-content,
-  #order-modal > div,
-  #confirm-modal > div {
-    width: 95vw !important;
-    max-width: 95vw !important;
-    margin: auto;
-    border-radius: 16px !important;
+  /* --- Add Script Overlay: full screen on mobile --- */
+  .add-script-overlay {
+    left: 0 !important;
   }
 
-  /* --- Toast: bottom-right on mobile --- */
+  /* --- ALL Modals: fluid width on mobile --- */
+  #order-modal > div,
+  #confirm-modal > div,
+  #deposit-modal > div,
+  #withdraw-modal > div {
+    width: 94vw !important;
+    max-width: 94vw !important;
+    margin: auto;
+    border-radius: 14px !important;
+    padding: 18px !important;
+  }
+
+  /* --- Toast: bottom-center on mobile --- */
   #toast-container {
     top: auto !important;
     bottom: 16px;
@@ -1117,6 +1177,14 @@ body {
 
   /* --- Empty state height --- */
   .empty-state-container { height: 200px; }
+
+  /* --- Tawk.to chat widget: push up so it doesn't overlap bottom content --- */
+  iframe[title="chat widget"],
+  .tawk-min-container,
+  #tawk-bubble-container {
+    bottom: 70px !important;
+    right: 10px !important;
+  }
 }
 
 /* ============================================================
@@ -1127,4 +1195,13 @@ body {
   .btn { font-size: 10px; padding: 3px 7px; height: 26px; }
   .header-left h2 { font-size: 14px; }
   .action-buttons .btn-live-tv { display: none; } /* hide on very small */
+
+  /* Extra small: tighten modal padding */
+  #order-modal > div,
+  #confirm-modal > div,
+  #deposit-modal > div,
+  #withdraw-modal > div {
+    padding: 14px !important;
+  }
 }
+
