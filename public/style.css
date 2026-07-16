@@ -98,6 +98,46 @@ body {
   text-transform: uppercase;
 }
 
+/* Collapsible toggle button (mobile) */
+.section-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.section-chevron {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0; /* hidden on desktop */
+  transition: transform 0.25s ease;
+}
+
+.nav-section-body {
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.25s ease;
+  max-height: 600px; /* open by default */
+  opacity: 1;
+}
+
+.nav-section-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Mobile only: make toggle interactive and show chevron */
+@media (max-width: 768px) {
+  .section-toggle { cursor: pointer; }
+  .section-toggle:hover { background: #f7fafc; border-radius: 6px; }
+  .section-chevron { opacity: 1; }
+  .section-toggle.collapsed .section-chevron { transform: rotate(-90deg); }
+}
+
 .nav-item {
   display: flex;
   align-items: center;

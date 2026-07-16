@@ -25,78 +25,88 @@
 
       <nav class="sidebar-nav">
         <!-- TRADING Section -->
-        <div class="nav-section">
-          <span class="section-title">TRADING</span>
-          <a href="#" class="nav-item" data-tab="watchlist">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            Watchlist
-          </a>
-          <a href="#" class="nav-item active" data-tab="positions">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect width="20" height="14" x="2" y="3" rx="2"/>
-              <line x1="8" x2="16" y1="21" y2="21"/>
-              <line x1="12" x2="12" y1="17" y2="21"/>
-            </svg>
-            Positions
-          </a>
-          <a href="#" class="nav-item" data-tab="orders">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" x2="8" y1="13" y2="13"/>
-              <line x1="16" x2="8" y1="17" y2="17"/>
-              <line x1="10" x2="8" y1="9" y2="9"/>
-            </svg>
-            Orders
-          </a>
-          <a href="#" class="nav-item" data-tab="trade-history">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 3v18h18"/>
-              <path d="m19 9-5 5-4-4-3 3"/>
-            </svg>
-            Trade History
-          </a>
+        <div class="nav-section" id="nav-section-trading">
+          <button class="section-title section-toggle" data-target="nav-body-trading">
+            TRADING
+            <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="nav-section-body" id="nav-body-trading">
+            <a href="#" class="nav-item" data-tab="watchlist">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              Watchlist
+            </a>
+            <a href="#" class="nav-item active" data-tab="positions">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="20" height="14" x="2" y="3" rx="2"/>
+                <line x1="8" x2="16" y1="21" y2="21"/>
+                <line x1="12" x2="12" y1="17" y2="21"/>
+              </svg>
+              Positions
+            </a>
+            <a href="#" class="nav-item" data-tab="orders">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" x2="8" y1="13" y2="13"/>
+                <line x1="16" x2="8" y1="17" y2="17"/>
+                <line x1="10" x2="8" y1="9" y2="9"/>
+              </svg>
+              Orders
+            </a>
+            <a href="#" class="nav-item" data-tab="trade-history">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18"/>
+                <path d="m19 9-5 5-4-4-3 3"/>
+              </svg>
+              Trade History
+            </a>
+          </div>
         </div>
 
         <!-- ACCOUNT Section -->
-        <div class="nav-section">
-          <span class="section-title">ACCOUNT</span>
-          <a href="#" class="nav-item" data-tab="funds">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="4" width="20" height="16" rx="2"/>
-              <line x1="12" x2="12" y1="10" y2="14"/>
-              <line x1="10" x2="14" y1="12" y2="12"/>
-            </svg>
-            Funds
-          </a>
-          <a href="#" class="nav-item" data-tab="withdraw">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-              <path d="M3 3v5h5"/>
-              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-              <path d="M16 16h5v5"/>
-            </svg>
-            Withdraw
-          </a>
-          <a href="#" class="nav-item" data-tab="ledger">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
-              <path d="M6 6h10"/>
-              <path d="M6 10h10"/>
-            </svg>
-            Ledger
-          </a>
-          <a href="#" class="nav-item" data-tab="rejections">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="15" x2="9" y1="9" y2="15"/>
-              <line x1="9" x2="15" y1="9" y2="15"/>
-            </svg>
-            Rejections
-          </a>
+        <div class="nav-section" id="nav-section-account">
+          <button class="section-title section-toggle" data-target="nav-body-account">
+            ACCOUNT
+            <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="nav-section-body" id="nav-body-account">
+            <a href="#" class="nav-item" data-tab="funds">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <line x1="12" x2="12" y1="10" y2="14"/>
+                <line x1="10" x2="14" y1="12" y2="12"/>
+              </svg>
+              Funds
+            </a>
+            <a href="#" class="nav-item" data-tab="withdraw">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                <path d="M16 16h5v5"/>
+              </svg>
+              Withdraw
+            </a>
+            <a href="#" class="nav-item" data-tab="ledger">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
+                <path d="M6 6h10"/>
+                <path d="M6 10h10"/>
+              </svg>
+              Ledger
+            </a>
+            <a href="#" class="nav-item" data-tab="rejections">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" x2="9" y1="9" y2="15"/>
+                <line x1="9" x2="15" y1="9" y2="15"/>
+              </svg>
+              Rejections
+            </a>
+          </div>
         </div>
       </nav>
 
@@ -440,5 +450,19 @@
   <!-- socket.io client — loaded from our own server (auto-served by socket.io) -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>
+
+  <!--Start of Tawk.to Script-->
+  <script type="text/javascript">
+    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+    (function(){
+      var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+      s1.async=true;
+      s1.src='https://embed.tawk.to/6a58b32da8eec21d493306af/1jtl7nrdt';
+      s1.charset='UTF-8';
+      s1.setAttribute('crossorigin','*');
+      s0.parentNode.insertBefore(s1,s0);
+    })();
+  </script>
+  <!--End of Tawk.to Script-->
 </body>
 </html>

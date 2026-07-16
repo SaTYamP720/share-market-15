@@ -170,6 +170,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (window.innerWidth <= 768) closeSidebar();
     });
   });
+
+  // --- Collapsible Section Toggles (mobile only) ---
+  document.querySelectorAll('.section-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.innerWidth > 768) return; // desktop: no-op
+      const targetId = btn.dataset.target;
+      const body = document.getElementById(targetId);
+      if (!body) return;
+      const isCollapsed = body.classList.toggle('collapsed');
+      btn.classList.toggle('collapsed', isCollapsed);
+    });
+  });
   
   // Script Overlay elements
   const addScriptOverlay = document.getElementById('add-script-overlay');
