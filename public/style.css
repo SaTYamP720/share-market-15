@@ -1012,7 +1012,8 @@ body {
 
   /* Watchlist: hide the details panel on tablet unless selected */
   .watchlist-layout { gap: 16px; }
-  .instrument-details-panel { width: 280px; min-width: 260px; }
+  .watchlist-details-panel { width: 280px; min-width: 260px; }
+  .watchlist-details-panel.empty { display: none !important; }
 
   /* Tables: reduce padding */
   .terminal-table th { padding: 10px 12px; font-size: 10px; }
@@ -1095,12 +1096,15 @@ body {
   /* --- Watchlist Layout: stack vertically --- */
   .watchlist-layout { flex-direction: column; height: auto; gap: 12px; }
   .watchlist-main { overflow: visible; }
-  .instrument-details-panel {
+  .watchlist-details-panel {
     width: 100% !important;
     min-width: unset !important;
     max-width: 100% !important;
     border-left: none !important;
     border-top: 1px solid #eef2f6;
+  }
+  .watchlist-details-panel.empty {
+    display: none !important;
   }
 
   /* --- Watchlist Header Bar --- */

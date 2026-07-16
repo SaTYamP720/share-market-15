@@ -2013,6 +2013,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!detailsPanel) return;
 
     if (!selectedScript) {
+      detailsPanel.classList.add('empty');
       detailsPanel.innerHTML = `
         <div class="select-instrument-placeholder">
           <p>Select an instrument</p>
@@ -2020,6 +2021,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       return;
     }
+    detailsPanel.classList.remove('empty');
 
     const latestQuote = getLatestQuoteForSelectedScript();
     const q = latestQuote || selectedScript.quote || {
